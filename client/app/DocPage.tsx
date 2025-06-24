@@ -1,9 +1,34 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { use, useEffect, useRef, useState } from "react";
+import { throttle, debounce } from "./utils";
 
 const DocPage: React.FC = () => {
   const ws = useRef<WebSocket | null>(null);
   const [isClient, setIsClient] = useState(false);
+
+  const throttleRef = useRef(
+    throttle((payload) => {
+      console.log("throttle", payload);
+      ws.current?.send(
+        JSON.stringify({
+          type: "content",
+          data: payload,
+        })
+      );
+    }, 200)
+  );
+
+  const debounceRef = useRef(
+    debounce((payload) => {
+      console.log("debounce", payload);
+      ws.current?.send(
+        JSON.stringify({
+          type: "content",
+          data: payload,
+        })
+      );
+    }, 400)
+  );
 
   useEffect(() => {
     //(Hydration error fix)
@@ -34,13 +59,9 @@ const DocPage: React.FC = () => {
     if (!e) {
       return;
     }
-    console.log(e.currentTarget.innerHTML);
-    ws.current?.send(
-      JSON.stringify({
-        type: "content",
-        data: e.currentTarget.innerHTML,
-      })
-    );
+    // console.log(e.currentTarget.innerHTML);
+    throttleRef.current(e.currentTarget.innerHTML);
+    debounceRef.current(e.currentTarget.innerHTML);
   };
 
   return (
