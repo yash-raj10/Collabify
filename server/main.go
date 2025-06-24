@@ -1,0 +1,30 @@
+package main
+
+import (
+	"collabify-backend/socket"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+func main(){
+	r := gin.Default()
+
+	r.LoadHTMLFiles("chat.html")
+
+	ws := socket.NewWebSocketManager()
+	go ws.Run()
+
+
+	r.GET("/ws", func(c *gin.Context) {
+		ws.HandleWBConnections(c.Writer, c.Request)
+	})
+
+	r.GET("/chat", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "chat.html", gin.H{
+			"title": "Chat Room"},)
+	})
+
+	r.Run(":8080") 
+
+}
