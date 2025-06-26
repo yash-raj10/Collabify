@@ -9,14 +9,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// ChatMessage represents a message with sender ID and text
-type ChatMessage struct {
-	SenderID string `json:"sender_id"`
-	Data     string `json:"data"` // "any msg"m or "typing...."
-	Type string `json:"type"` // "msg" or "typing status"
+type ContentData struct {
+	Content  string   `json:"content"`
+	Position Position `json:"position"`
 }
 
-// client represents a single websocket connection
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type ChatMessage struct {
+	SenderID string      `json:"sender_id"`
+	Data     ContentData `json:"data"` // content with position data
+	Type     string      `json:"type"` // "content" or "typing status..."
+}
+
 type Client struct{
 	Conn *websocket.Conn
 	Send chan ChatMessage
@@ -125,7 +133,8 @@ func(manager *WebSocketManager) HandleClientRead(client *Client) {
 		}
 		msg.SenderID = client.ID // set sender ID to client's ID
 
-		log.Printf("Received message from %s: %s", client.ID, msg.Data)
+		log.Printf("Received message from %s: content=%s, position=(%f,%f)", 
+			client.ID, msg.Data.Content, msg.Data.Position.X, msg.Data.Position.Y)
 		// Broadcast ChatMessage struct
 		manager.Broadcast <-  msg
 	}
