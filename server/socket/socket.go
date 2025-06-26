@@ -12,6 +12,7 @@ import (
 type ContentData struct {
 	Content  string   `json:"content"`
 	Position Position `json:"position"`
+	UserData UserData `json:"userData"`
 }
 
 type Position struct {
@@ -19,22 +20,28 @@ type Position struct {
 	Y float64 `json:"y"`
 }
 
+type UserData struct {
+	UserId    string `json:"userId"`
+	UserName  string `json:"userName"`
+	UserColor string `json:"userColor"`
+}
+
 type ChatMessage struct {
-	SenderID string      `json:"sender_id"`
-	Data     ContentData `json:"data"` // content with position data
-	Type     string      `json:"type"` // "content" or "typing status..."
+	Data interface{} `json:"data"` // Can handle both ContentData and map[string]map[string]string
+	Type string      `json:"type"` // "content" or "user-data", "user-added", etc.
 }
 
 type Client struct{
 	Conn *websocket.Conn
-	Send chan ChatMessage
+	Send chan []byte  // buffered channel for sending messages
 	ID string
+	Data map[string]UserData
 }
 
 // this manages websocket connections
 type WebSocketManager struct {
 	Clients map[*Client]bool
-	Broadcast chan ChatMessage
+	Broadcast chan []byte // channel for broadcasting messages to all clients
 	Register chan *Client
 	Unregister chan *Client
 	Mutex sync.RWMutex
@@ -43,7 +50,7 @@ type WebSocketManager struct {
 func NewWebSocketManager() *WebSocketManager {
 	return &WebSocketManager{
 		Clients: make(map[*Client]bool),
-		Broadcast: make(chan ChatMessage),
+		Broadcast: make(chan []byte), // buffered channel for broadcasting messages
 		Register: make(chan *Client),
 		Unregister: make(chan *Client),
 	}
@@ -56,19 +63,28 @@ func(manager *WebSocketManager) Run(){
 			manager.Mutex.Lock()
 			manager.Clients[client] = true
 			manager.Mutex.Unlock()
+
 		case client := <- manager.Unregister:
 			manager.Mutex.Lock()
 			if _, ok := manager.Clients[client]; ok {
 				delete(manager.Clients, client)
 				close(client.Send)
+
+				// Notify other clients about the disconnection
+				go manager.HandleDeleteUser(client)
 			}
 			manager.Mutex.Unlock()
+			log.Printf("Client disconnected: %s", client.ID)	
+
 		case message := <- manager.Broadcast:
 			manager.Mutex.RLock()
+			log.Printf("Broadcasting message to %d clients", len(manager.Clients))
 			for client := range manager.Clients{
 				select {
 				case client.Send <- message:
+					// Message sent successfully
 				default:
+					log.Printf("Client %s send channel is full, removing client", client.ID)
 					close(client.Send)
 					delete(manager.Clients, client)
 				}
@@ -95,18 +111,101 @@ func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *ht
 		http.Error(w, "Could not upgrade connection", http.StatusInternalServerError)
 		return
 	}
-	
-	client := &Client{
-		Conn: conn,
-		Send: make(chan ChatMessage),
-		ID: r.RemoteAddr, // using remote address as id 
+
+	data := map[string]UserData{
+		"userData": {
+			UserId:    r.RemoteAddr,
+			UserName:  GetRandomName(),
+			UserColor: GetRandomColor(),
+		},
 	}
 
-	// will hit case client := <-manager.Register: in Run() func 
+	client := &Client{
+		Conn: conn,
+		Send: make(chan []byte, 512), // Increased buffer for better handling
+		ID: r.RemoteAddr, // using remote address as id 
+		Data: data,
+	}
+
+  	// will hit case client := <-manager.Register: in Run() func 
 	manager.Register <- client
 
 	go manager.HandleClientRead(client)
 	go manager.HandleClientWrite(client)
+
+	// Handle user data after adding client to the map
+	go manager.HandleUserData(client)
+}
+
+func (manager *WebSocketManager) HandleDeleteUser(client *Client) {
+
+	message := ChatMessage{
+		Data: client.Data,
+		Type: "user-removed",
+	}
+
+	jsonData, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("marshal user removed error: %v", err)
+		return
+	}
+
+	manager.Broadcast <- jsonData
+}
+
+func(manager *WebSocketManager) HandleUserData(client *Client) {
+	// 1. send user data to itself first
+	selfMessage := ChatMessage{
+		Data: client.Data,
+		Type: "user-data",
+	}
+
+	jsonData, err := json.Marshal(selfMessage)
+	if err != nil {
+		log.Printf("marshal error: %v", err)
+		return
+	}
+
+	client.Send <- jsonData
+	log.Printf("Sent user data to client %s", client.ID)
+
+	// 2. send existing users to the new client
+	manager.Mutex.RLock()
+	for existingClient := range manager.Clients {
+		if existingClient.ID == client.ID { continue } // avoid sending to itself
+
+		existingUserMeg := ChatMessage{
+			Data: existingClient.Data,
+			Type: "user-added",
+		}
+
+		existingUserData , err := json.Marshal(existingUserMeg)
+		if err != nil {
+			log.Printf("marshal existingUserData: %v", err)
+			continue
+		}
+
+		//send directly to the client 
+		client.Send <- existingUserData
+		log.Printf("Sent existing user data to new client %s: %v", client.ID, existingClient.ID)
+	}
+	manager.Mutex.RUnlock()
+
+	//3. announce new client to all other clinets
+	newUserMessage := ChatMessage{
+		Data: client.Data,
+		Type: "user-added",
+	}
+	newUserData, err := json.Marshal(newUserMessage)
+	if err != nil {
+		log.Printf("error marshelling new user announcement: %v", err)
+		return
+	}
+
+
+	// Broadcast to all clients
+	manager.Broadcast <- newUserData
+	log.Printf("Announced new user %s to all clients", client.ID)
 }
 
 func(manager *WebSocketManager) HandleClientRead(client *Client) {
@@ -124,21 +223,43 @@ func(manager *WebSocketManager) HandleClientRead(client *Client) {
 			break // exit the loop on error
 		}
 
-		var msg ChatMessage
-
-		err = json.Unmarshal(message, &msg)
+		// First, parse just the type to determine message structure
+		var typeOnly struct {
+			Type string `json:"type"`
+		}
+		
+		err = json.Unmarshal(message, &typeOnly)
 		if err != nil {
-			log.Printf("unmarshal error: %v", err)
+			log.Printf("unmarshal type error: %v", err)
 			continue 
 		}
-		msg.SenderID = client.ID // set sender ID to client's ID
 
-		log.Printf("Received message from %s: content=%s, position=(%f,%f)", 
-			client.ID, msg.Data.Content, msg.Data.Position.X, msg.Data.Position.Y)
-		// Broadcast ChatMessage struct
-		manager.Broadcast <-  msg
+		if typeOnly.Type == "content" {
+			// Handle content messages with ContentData structure
+			var contentMsg struct {
+				Type string      `json:"type"`
+				Data ContentData `json:"data"`
+			}
+			
+			err = json.Unmarshal(message, &contentMsg)
+			if err != nil {
+				log.Printf("unmarshal content error: %v", err)
+				continue 
+			}
+
+			log.Printf("Received content from %s (user: %s): content length=%d, position=(%f,%f)", 
+				client.ID, contentMsg.Data.UserData.UserId, len(contentMsg.Data.Content), 
+				contentMsg.Data.Position.X, contentMsg.Data.Position.Y)
+
+			// Broadcast the original message
+			log.Printf("Broadcasting content message from %s", client.ID)
+			manager.Broadcast <- message
+		} else {
+			// Handle other message types (user-data, user-added, etc.)
+			log.Printf("Received %s message from %s", typeOnly.Type, client.ID)
+			manager.Broadcast <- message
+		}
 	}
-	
 }
 
 func(manager *WebSocketManager) HandleClientWrite(client *Client) {
@@ -154,28 +275,10 @@ func(manager *WebSocketManager) HandleClientWrite(client *Client) {
 					return
 				}
 
-				// Marshal ChatMessage to JSON
-				msgBytes, err := json.Marshal(message)
-				if err != nil {
-					log.Printf("marshal error: %v", err)
-					continue
-				}
-
-				w, err := client.Conn.NextWriter(websocket.TextMessage)
+				// Send each message separately to avoid JSON concatenation issues
+				err := client.Conn.WriteMessage(websocket.TextMessage, message)
 				if err != nil {
 					log.Printf("websocket write error: %v", err)
-					return
-				}
-				w.Write(msgBytes)
-
-				n := len(client.Send)
-				for i := 0; i<n ; i++{
-					msgBytes, _ := json.Marshal(<-client.Send)
-					w.Write(msgBytes)
-				}
-
-				if err := w.Close(); err !=nil{
-					log.Printf("websocket close error: %v", err)
 					return
 				}
 		}
