@@ -77,7 +77,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
   );
 
   const applyRemoteUpdate = (remoteContent: string): void => {
-    if (!contentArea.current) return;
+    if (!contentArea.current || !isClient) return;
 
     try {
       const selection = window.getSelection();
@@ -291,7 +291,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
   }, [isClient, sessionId]);
 
   const handleInputTyping = (e: React.FormEvent<HTMLDivElement>) => {
-    if (!e) {
+    if (!e || !isClient) {
       return;
     }
 
@@ -318,128 +318,179 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
     debounceRef.current(payload);
   };
 
-  return (
-    <div className="bg-gray-100 relative min-h-screen flex flex-col items-center text-black">
-      <div className="bg-white mb-4 p-4 flex justify-between items-center shadow w-full">
-        <div>
-          <button
-            onClick={() => router.push("/")}
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-            title="Go back to home"
-          >
-            ← Back
-          </button>
-          <span className="text-xl font-bold pl-3">Collabify - Doc Online</span>
-        </div>
-
-        <div className="text-sm text-gray-600">
-          Session ID:{" "}
-          <span className="font-mono bg-gray-100 px-2 py-1 rounded">
-            {sessionId}
-          </span>
-          <button
-            onClick={() =>
-              navigator.clipboard.writeText(
-                `${window.location.origin}/excalidraw/${sessionId}`
-              )
-            }
-            className="ml-2 text-blue-500 hover:text-blue-700"
-            title="Copy session link"
-          >
-            📋
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-          <div>
-            <span className="mr-4 font-bold">
-              {userDataRef.current.userName || "Guest"}
+  // Prevent hydration mismatch by not rendering until client-side
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-teal-900 to-emerald-800 flex items-center justify-center">
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
+          <div className="flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+            <span className="text-white text-lg">
+              Loading Document Editor...
             </span>
-            <span
-              className={`inline-block w-3 h-3 rounded-full mr-2 ${
-                isConnected ? "bg-green-500" : "bg-red-500"
-              }`}
-            ></span>
-            <span>{isConnected ? "Connected" : "Disconnected"}</span>
-          </div>
-          <div className="flex gap-2 truncate max-w-48">
-            {users.map((user: UserDataType, index: number) => (
-              <div
-                key={user.userId}
-                className={`text-white px-2 py-1 rounded-full ${
-                  index > 0 && "-ml-4"
-                }`}
-                style={{ background: `${user.userColor}` }}
-                title={user.userName ?? ""}
-              >
-                {user.userName || "Guest"}
-              </div>
-            ))}
           </div>
         </div>
       </div>
-      <div className="relative ">
+    );
+  }
+
+  return (
+    <div className="bg-gradient-to-br from-blue-900 via-teal-900 to-emerald-800 relative min-h-screen flex flex-col text-black overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-32 w-80 h-80 bg-gradient-to-br from-blue-400/20 to-teal-400/20 rounded-full blur-3xl animate-pulse"></div>
         <div
-          className="bg-white h-[1124px] w-[784px] p-8 shadow-md"
-          contentEditable
-          ref={contentArea}
-          onInput={handleInputTyping}
+          className="absolute top-32 -left-40 w-96 h-96 bg-gradient-to-br from-emerald-400/15 to-green-400/15 rounded-full blur-3xl animate-bounce"
+          style={{ animationDuration: "6s" }}
         ></div>
-        {userCursors.map((item: UserCursor, index: number) => {
-          if (!contentArea.current) return null;
+      </div>
 
-          const ContainerRect = contentArea.current.getBoundingClientRect();
-          const relativeX = item.position.x - ContainerRect.left - 20;
-          const relativeY = item.position.y - ContainerRect.top;
-
-          return (
-            <div
-              key={index}
-              className="absolute w-4 h-4 rounded-full"
-              style={{
-                position: "absolute",
-                left: `${relativeX}px`,
-                top: `${relativeY}px`,
-                transform: "translate(-60%)",
-                zIndex: 1000,
-                pointerEvents: "none",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-              }}
+      {/* Glassmorphism Header */}
+      <header className="relative z-10 backdrop-blur-md bg-white/10 border-b border-white/20 shadow-lg">
+        <div className="px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push("/")}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-xl transition-all duration-200 font-medium border border-white/30 hover:border-white/50"
+              title="Go back to home"
             >
+              ← Back
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-teal-400 rounded-xl flex items-center justify-center shadow-lg">
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">
+                  Collabify - Doc Online
+                </h1>
+                <p className="text-white/70 text-sm">
+                  Collaborative Document Editor
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/20">
+              <span className="text-sm text-white/80">Session ID:</span>
+              <span className="font-mono text-white font-medium ml-2">
+                {sessionId}
+              </span>
+              <button
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    navigator.clipboard.writeText(
+                      `${window.location.origin}/doc/${sessionId}`
+                    );
+                  }
+                }}
+                className="ml-3 text-blue-300 hover:text-white transition-colors"
+                title="Copy session link"
+              >
+                📋
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/20 flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-3 h-3 rounded-full ${
+                      isConnected ? "bg-green-400" : "bg-red-400"
+                    } shadow-lg`}
+                  ></span>
+                  <span className="text-white font-medium">
+                    {userDataRef.current.userName || "Guest"}
+                  </span>
+                </div>
+                <span className="text-white/70 text-sm">
+                  {isConnected ? "Online" : "Offline"}
+                </span>
+              </div>
+
+              <div className="flex gap-1">
+                {users.map((user: UserDataType, index: number) => (
+                  <div
+                    key={user.userId}
+                    className={`text-white px-3 py-2 rounded-xl backdrop-blur-sm border border-white/20 text-sm font-medium ${
+                      index > 0 && "-ml-2"
+                    } hover:scale-105 transition-transform`}
+                    style={{
+                      background: `${user.userColor || "#666"}40`,
+                      borderColor: user.userColor || "#666",
+                    }}
+                    title={user.userName ?? ""}
+                  >
+                    {user.userName || "Guest"}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="relative z-10 flex-1 flex items-center justify-center p-6">
+        <div className="relative bg-white rounded-2xl shadow-2xl border border-white/20 overflow-hidden text-2xl">
+          <div
+            className="bg-white h-[1124px] w-[784px] p-8 "
+            contentEditable
+            ref={contentArea}
+            onInput={handleInputTyping}
+          ></div>
+
+          {/* User Cursors */}
+          {userCursors.map((item: UserCursor, index: number) => {
+            if (!contentArea.current) return null;
+
+            const ContainerRect = contentArea.current.getBoundingClientRect();
+            const relativeX = item.position.x - ContainerRect.left - 20;
+            const relativeY = item.position.y - ContainerRect.top;
+
+            return (
               <div
+                key={index}
+                className="absolute pointer-events-none"
                 style={{
-                  backgroundColor: item.userData.userColor ?? "",
-                  color: "#fff",
-                  padding: "2px 6px",
-                  borderRadius: "4px",
-                  fontSize: "12px",
-                  whiteSpace: "nowrap",
+                  left: `${relativeX}px`,
+                  top: `${relativeY}px`,
+                  zIndex: 1000,
                 }}
               >
-                {item.userData.userName}
+                <div
+                  className="text-white px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap shadow-lg backdrop-blur-sm border border-white/20"
+                  style={{
+                    backgroundColor: item.userData.userColor ?? "#666",
+                  }}
+                >
+                  {item.userData.userName}
+                </div>
+                <div
+                  className="w-0.5 h-4 mt-1"
+                  style={{
+                    backgroundColor: item.userData.userColor ?? "#666",
+                  }}
+                />
               </div>
-              <div
-                style={{
-                  width: "2px",
-                  height: "16px",
-                  backgroundColor: item.userData.userColor ?? "",
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </main>
     </div>
-
-    // <div className="bg-gray-100 min-h-screen p-16 flex justify-center">
-    //   <div
-    //     className="bg-white h-[1124px] w-[784px] p-8 shadow-md relative"
-    //     contentEditable
-    //     ref={contentArea}
-    //     onInput={handleInputTyping}
-    //   ></div>
-    // </div>
   );
 };
 

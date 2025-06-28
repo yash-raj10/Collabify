@@ -306,149 +306,194 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
     ])
   );
 
-  return (
-    <div className="bg-gray-100 relative min-h-screen flex flex-col items-center text-black">
-      <div className="bg-white mb-4 p-4 flex justify-between items-center shadow w-full">
-        <div>
-          <button
-            onClick={() => router.push("/")}
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
-            title="Go back to home"
-          >
-            ← Back
-          </button>
-
-          <span className="text-xl font-bold pl-3">Collabify - ExcaliDraw</span>
-        </div>
-
-        <div className="text-sm text-gray-600">
-          Session ID:{" "}
-          <span className="font-mono bg-gray-100 px-2 py-1 rounded">
-            {sessionId}
-          </span>
-          <button
-            onClick={() =>
-              navigator.clipboard.writeText(
-                `${window.location.origin}/excalidraw/${sessionId}`
-              )
-            }
-            className="ml-2 text-blue-500 hover:text-blue-700"
-            title="Copy session link"
-          >
-            📋
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-          <div>
-            <span className="mr-4 font-bold">
-              {userDataRef.current.userName || "Guest"}
-            </span>
-            <span
-              className={`inline-block w-3 h-3 rounded-full mr-2 ${
-                isConnected ? "bg-green-500" : "bg-red-500"
-              }`}
-            ></span>
-            <span>{isConnected ? "Connected" : "Disconnected"}</span>
-          </div>
-          <div className="flex gap-2 truncate max-w-48">
-            {users.map((user: UserDataType, index: number) => (
-              <div
-                key={user.userId}
-                className={`text-white px-2 py-1 rounded-full ${
-                  index > 0 && "-ml-4"
-                }`}
-                style={{ background: `${user.userColor}` }}
-                title={user.userName ?? ""}
-              >
-                {user.userName || "Guest"}
-              </div>
-            ))}
+  // Prevent hydration mismatch by not rendering until client-side
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center">
+        <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20">
+          <div className="flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+            <span className="text-white text-lg">Loading ExcaliDraw...</span>
           </div>
         </div>
       </div>
-      <div className="relative w-full h-full">
-        <div style={{ height: "calc(100vh - 80px)", width: "100vw" }}>
-          <Excalidraw onPointerUpdate={handlePointerUpdate} />
-        </div>
-        {userCursors.map((item: UserCursor, index: number) => {
-          return (
-            <div
-              key={index}
-              className="absolute"
-              style={{
-                position: "absolute",
-                left: `${item.position.x}px`,
-                top: `${item.position.y + 80}px`, // Offset for header
-                zIndex: 1000,
-                pointerEvents: "none",
-              }}
-            >
-              {/* Arrow Cursor */}
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                style={{
-                  position: "absolute",
-                  transform: "translate(-2px, -2px)",
-                }}
-              >
-                {/* Arrow shadow for better visibility */}
-                <path
-                  d="M5.5 4.5L5.5 17.5L9.5 13.5L13.5 17.5L15.5 15.5L11.5 11.5L15.5 7.5L5.5 4.5Z"
-                  fill="rgba(0,0,0,0.2)"
-                  transform="translate(1,1)"
-                />
-                {/* Main arrow */}
-                <path
-                  d="M5 4L5 17L9 13L13 17L15 15L11 11L15 7L5 4Z"
-                  fill={item.userData.userColor || "#666"}
-                  stroke="white"
-                  strokeWidth="1"
-                />
-              </svg>
+    );
+  }
 
-              {/* Name Label */}
-              <div
-                style={{
-                  position: "absolute",
-                  left: "20px",
-                  top: "0px",
-                  backgroundColor: item.userData.userColor || "#666",
-                  color: "#fff",
-                  padding: "4px 8px",
-                  borderRadius: "6px",
-                  fontSize: "12px",
-                  fontWeight: "500",
-                  whiteSpace: "nowrap",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  fontFamily: "system-ui, -apple-system, sans-serif",
-                }}
-              >
-                {item.userData.userName}
-                {/* Small triangle pointing to cursor */}
-                <div
-                  style={{
-                    position: "absolute",
-                    left: "-4px",
-                    top: "50%",
-                    transform: "translateY(-50%)",
-                    width: "0",
-                    height: "0",
-                    borderTop: "4px solid transparent",
-                    borderBottom: "4px solid transparent",
-                    borderRight: `4px solid ${
-                      item.userData.userColor || "#666"
-                    }`,
-                  }}
-                />
+  return (
+    <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 relative min-h-screen flex flex-col text-white overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-40 -right-32 w-80 h-80 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse"></div>
+        <div
+          className="absolute top-32 -left-40 w-96 h-96 bg-gradient-to-br from-blue-400/15 to-indigo-400/15 rounded-full blur-3xl animate-bounce"
+          style={{ animationDuration: "6s" }}
+        ></div>
+      </div>
+
+      {/* Glassmorphism Header */}
+      <header className="relative z-10 backdrop-blur-md bg-white/10 border-b border-white/20 shadow-lg">
+        <div className="px-6 py-4 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => router.push("/")}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white rounded-xl transition-all duration-200 font-medium border border-white/30 hover:border-white/50"
+              title="Go back to home"
+            >
+              ← Back
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-400 rounded-xl flex items-center justify-center shadow-lg">
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-white">
+                  Collabify - ExcaliDraw
+                </h1>
+                <p className="text-white/70 text-sm">
+                  Collaborative Whiteboard
+                </p>
               </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+
+          <div className="flex items-center gap-6">
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/20">
+              <span className="text-sm text-white/80">Session ID:</span>
+              <span className="font-mono text-white font-medium ml-2">
+                {sessionId}
+              </span>
+              <button
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    navigator.clipboard.writeText(
+                      `${window.location.origin}/excalidraw/${sessionId}`
+                    );
+                  }
+                }}
+                className="ml-3 text-purple-300 hover:text-white transition-colors"
+                title="Copy session link"
+              >
+                📋
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/20 flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-3 h-3 rounded-full ${
+                      isConnected ? "bg-green-400" : "bg-red-400"
+                    } shadow-lg`}
+                  ></span>
+                  <span className="text-white font-medium">
+                    {userDataRef.current.userName || "Guest"}
+                  </span>
+                </div>
+                <span className="text-white/70 text-sm">
+                  {isConnected ? "Online" : "Offline"}
+                </span>
+              </div>
+
+              <div className="flex gap-1">
+                {users.map((user: UserDataType, index: number) => (
+                  <div
+                    key={user.userId}
+                    className={`text-white px-3 py-2 rounded-xl backdrop-blur-sm border border-white/20 text-sm font-medium ${
+                      index > 0 && "-ml-2"
+                    } hover:scale-105 transition-transform`}
+                    style={{
+                      background: `${user.userColor || "#666"}40`,
+                      borderColor: user.userColor || "#666",
+                    }}
+                    title={user.userName ?? ""}
+                  >
+                    {user.userName || "Guest"}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="relative z-10 flex-1">
+        <div
+          className="relative bg-white/95 backdrop-blur-sm rounded-2xl m-4 shadow-2xl border border-white/20"
+          style={{ height: "calc(100vh - 120px)" }}
+        >
+          <Excalidraw onPointerUpdate={handlePointerUpdate} />
+
+          {/* User Cursors */}
+          {userCursors.map((item: UserCursor, index: number) => {
+            return (
+              <div
+                key={index}
+                className="absolute pointer-events-none"
+                style={{
+                  left: `${item.position.x}px`,
+                  top: `${item.position.y}px`,
+                  zIndex: 1000,
+                }}
+              >
+                {/* Arrow Cursor */}
+                <svg
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  className="absolute -translate-x-0.5 -translate-y-0.5"
+                >
+                  {/* Arrow shadow for better visibility */}
+                  <path
+                    d="M5.5 4.5L5.5 17.5L9.5 13.5L13.5 17.5L15.5 15.5L11.5 11.5L15.5 7.5L5.5 4.5Z"
+                    fill="rgba(0,0,0,0.2)"
+                    transform="translate(1,1)"
+                  />
+                  {/* Main arrow */}
+                  <path
+                    d="M5 4L5 17L9 13L13 17L15 15L11 11L15 7L5 4Z"
+                    fill={item.userData.userColor || "#666"}
+                    stroke="white"
+                    strokeWidth="1"
+                  />
+                </svg>
+
+                {/* Name Label */}
+                <div
+                  className="absolute left-5 top-0 text-white px-2 py-1 rounded-lg text-xs font-medium whitespace-nowrap shadow-lg backdrop-blur-sm border border-white/20"
+                  style={{
+                    backgroundColor: item.userData.userColor || "#666",
+                  }}
+                >
+                  {item.userData.userName}
+                  {/* Small triangle pointing to cursor */}
+                  <div
+                    className="absolute -left-1 top-1/2 -translate-y-1/2 w-0 h-0 border-t-2 border-b-2 border-r-2 border-transparent"
+                    style={{
+                      borderRightColor: item.userData.userColor || "#666",
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </main>
     </div>
   );
 };
+
 export default ExcalidrawWrapper;
