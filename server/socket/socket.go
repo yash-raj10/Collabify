@@ -1,12 +1,20 @@
 package socket
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 type ContentData struct {
@@ -24,6 +32,67 @@ type UserData struct {
 	UserId    string `json:"userId"`
 	UserName  string `json:"userName"`
 	UserColor string `json:"userColor"`
+}
+
+var (
+	jwtSecret = []byte("your-secret-key") // Should match auth package
+	animalEmojis = []string{"🦁", "🐮", "🐯", "🐰", "🐻", "🐼", "🐨", "🐸", "🐷", "🐵", "🦊", "🐺", "🐴", "🦄", "🐧", "🐦", "🦅", "🦆", "🐔", "🐢"}
+	usersCollection *mongo.Collection // Will be set from main package
+)
+
+// SetUsersCollection allows main package to set the users collection
+func SetUsersCollection(collection *mongo.Collection) {
+	usersCollection = collection
+}
+
+// User struct for database queries
+type User struct {
+	ID    interface{} `bson:"_id,omitempty"`
+	Email string      `bson:"email"`
+	Name  string      `bson:"name"`
+}
+
+// Extract user info from JWT token and get name from DB
+func extractUserFromToken(tokenString string) (string, string, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return jwtSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		return "", "", fmt.Errorf("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", "", fmt.Errorf("invalid token claims")
+	}
+
+	userEmail, ok := claims["user_email"].(string)
+	if !ok {
+		return "", "", fmt.Errorf("invalid user email in token")
+	}
+
+	// Get user name from database
+	var user User
+	if usersCollection != nil {
+		err := usersCollection.FindOne(context.Background(), bson.M{"email": userEmail}).Decode(&user)
+		if err != nil {
+			log.Printf("Could not find user in database: %v", err)
+			return userEmail, "Unknown User", nil // Fallback to unknown user
+		}
+		return userEmail, user.Name, nil
+	}
+
+	return userEmail, "Unknown User", nil
+}
+
+// Get random animal emoji
+func getRandomAnimalEmoji() string {
+	rand.Seed(time.Now().UnixNano())
+	return animalEmojis[rand.Intn(len(animalEmojis))]
 }
 
 type ChatMessage struct {
@@ -95,6 +164,30 @@ func(manager *WebSocketManager) Run(){
 }
 
 func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *http.Request) {
+	// Extract JWT token from query parameters or headers
+	var tokenString string
+	
+	// Try to get token from Authorization header
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+	} else {
+		// Try to get token from query parameter
+		tokenString = r.URL.Query().Get("token")
+	}
+
+	if tokenString == "" {
+		http.Error(w, "Authorization token required", http.StatusUnauthorized)
+		return
+	}
+
+	// Extract user information from token
+	userEmail, userName, err := extractUserFromToken(tokenString)
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
 	// making Upgrader
 	upgarder := websocket.Upgrader{
 		ReadBufferSize: 1024,
@@ -112,10 +205,12 @@ func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Create user data with actual user info and random emoji
+	emoji := getRandomAnimalEmoji()
 	data := map[string]UserData{
 		"userData": {
-			UserId:    r.RemoteAddr,
-			UserName:  GetRandomName(),
+			UserId:    userEmail,
+			UserName:  userName + " " + emoji,
 			UserColor: GetRandomColor(),
 		},
 	}
@@ -123,7 +218,7 @@ func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *ht
 	client := &Client{
 		Conn: conn,
 		Send: make(chan []byte, 512), // Increased buffer for better handling
-		ID: r.RemoteAddr, // using remote address as id 
+		ID: userEmail, // using actual user email instead of remote address
 		Data: data,
 	}
 

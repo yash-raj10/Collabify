@@ -1,5 +1,6 @@
 "use client";
 import React, { use, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { throttle, debounce } from "./utils";
 
 type UserDataType = {
@@ -33,7 +34,12 @@ interface ContentMessage {
 
 type WSMessage = UserMessage | ContentMessage;
 
-const DocPage: React.FC = () => {
+interface DocPageProps {
+  sessionId?: string;
+}
+
+const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
+  const router = useRouter();
   const ws = useRef<WebSocket | null>(null);
   const [isClient, setIsClient] = useState(false);
   const contentArea = useRef<HTMLDivElement | null>(null);
@@ -249,7 +255,16 @@ const DocPage: React.FC = () => {
   useEffect(() => {
     if (!isClient) return;
 
-    ws.current = new WebSocket("ws://localhost:8080/ws");
+    // Get JWT token from localStorage
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      console.error("No auth token found");
+      return;
+    }
+
+    ws.current = new WebSocket(
+      `ws://localhost:8080/ws?session=${sessionId}&token=${token}`
+    );
 
     ws.current.addEventListener("open", () => {
       console.log("WebSocket connection established");
@@ -273,7 +288,7 @@ const DocPage: React.FC = () => {
         ws.current.close();
       }
     };
-  }, [isClient]);
+  }, [isClient, sessionId]);
 
   const handleInputTyping = (e: React.FormEvent<HTMLDivElement>) => {
     if (!e) {
@@ -304,33 +319,62 @@ const DocPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-gray-100 relative min-h-screen flex flex-col items-center">
-      <div className="bg-white mb-4 p-4 flex justify-between shadow w-full">
-        <span className="text-xl font-bold">Collabify</span>
+    <div className="bg-gray-100 relative min-h-screen flex flex-col items-center text-black">
+      <div className="bg-white mb-4 p-4 flex justify-between items-center shadow w-full">
         <div>
-          <span className="mr-4 font-bold">
-            {userDataRef.current.userName || "Guest"}
-          </span>
-          <span
-            className={`inline-block w-3 h-3 rounded-full mr-2 ${
-              isConnected ? "bg-green-500" : "bg-red-500"
-            }`}
-          ></span>
-          <span>{isConnected ? "Connected" : "Disconnected"}</span>
+          <button
+            onClick={() => router.push("/")}
+            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium"
+            title="Go back to home"
+          >
+            ← Back
+          </button>
+          <span className="text-xl font-bold pl-3">Collabify - Doc Online</span>
         </div>
-        <div className="flex gap-2 truncate max-w-48">
-          {users.map((user: UserDataType, index: number) => (
-            <div
-              key={user.userId}
-              className={`text-white px-2 py-1 rounded-full ${
-                index > 0 && "-ml-4"
+
+        <div className="text-sm text-gray-600">
+          Session ID:{" "}
+          <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+            {sessionId}
+          </span>
+          <button
+            onClick={() =>
+              navigator.clipboard.writeText(
+                `${window.location.origin}/excalidraw/${sessionId}`
+              )
+            }
+            className="ml-2 text-blue-500 hover:text-blue-700"
+            title="Copy session link"
+          >
+            📋
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          <div>
+            <span className="mr-4 font-bold">
+              {userDataRef.current.userName || "Guest"}
+            </span>
+            <span
+              className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                isConnected ? "bg-green-500" : "bg-red-500"
               }`}
-              style={{ background: `${user.userColor}` }}
-              title={user.userName ?? ""}
-            >
-              {user.userName || "Guest"}
-            </div>
-          ))}
+            ></span>
+            <span>{isConnected ? "Connected" : "Disconnected"}</span>
+          </div>
+          <div className="flex gap-2 truncate max-w-48">
+            {users.map((user: UserDataType, index: number) => (
+              <div
+                key={user.userId}
+                className={`text-white px-2 py-1 rounded-full ${
+                  index > 0 && "-ml-4"
+                }`}
+                style={{ background: `${user.userColor}` }}
+                title={user.userName ?? ""}
+              >
+                {user.userName || "Guest"}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       <div className="relative ">
