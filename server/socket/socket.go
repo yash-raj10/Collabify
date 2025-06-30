@@ -104,25 +104,50 @@ type Client struct{
 	Conn *websocket.Conn
 	Send chan []byte  // buffered channel for sending messages
 	ID string
+	SessionID string // Add session ID to client
 	Data map[string]UserData
 }
 
-// this manages websocket connections
+// this manages websocket connections for a specific session
 type WebSocketManager struct {
 	Clients map[*Client]bool
 	Broadcast chan []byte // channel for broadcasting messages to all clients
 	Register chan *Client
 	Unregister chan *Client
 	Mutex sync.RWMutex
+	SessionID string // Add session ID to manager
 }
 
-func NewWebSocketManager() *WebSocketManager {
+// Global session managers
+var (
+	sessionManagers = make(map[string]*WebSocketManager)
+	sessionMutex    sync.RWMutex
+)
+
+func NewWebSocketManager(sessionID string) *WebSocketManager {
 	return &WebSocketManager{
 		Clients: make(map[*Client]bool),
 		Broadcast: make(chan []byte), // buffered channel for broadcasting messages
 		Register: make(chan *Client),
 		Unregister: make(chan *Client),
+		SessionID: sessionID,
 	}
+}
+
+// Get or create a session manager
+func GetOrCreateSessionManager(sessionID string) *WebSocketManager {
+	sessionMutex.Lock()
+	defer sessionMutex.Unlock()
+	
+	if manager, exists := sessionManagers[sessionID]; exists {
+		return manager
+	}
+	
+	manager := NewWebSocketManager(sessionID)
+	sessionManagers[sessionID] = manager
+	go manager.Run()
+	log.Printf("Created new session manager for session: %s", sessionID)
+	return manager
 }
 
 func(manager *WebSocketManager) Run(){
@@ -141,9 +166,14 @@ func(manager *WebSocketManager) Run(){
 
 				// Notify other clients about the disconnection
 				go manager.HandleDeleteUser(client)
+				
+				// Clean up empty session managers
+				if len(manager.Clients) == 0 {
+					go cleanupEmptySession(manager.SessionID)
+				}
 			}
 			manager.Mutex.Unlock()
-			log.Printf("Client disconnected: %s", client.ID)	
+			log.Printf("Client disconnected from session %s: %s", manager.SessionID, client.ID)	
 
 		case message := <- manager.Broadcast:
 			manager.Mutex.RLock()
@@ -163,7 +193,14 @@ func(manager *WebSocketManager) Run(){
 	}
 }
 
-func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *http.Request) {
+func HandleWBConnections(w http.ResponseWriter, r *http.Request) {
+	// Extract session ID from query parameters
+	sessionID := r.URL.Query().Get("session")
+	if sessionID == "" {
+		http.Error(w, "Session ID required", http.StatusBadRequest)
+		return
+	}
+
 	// Extract JWT token from query parameters or headers
 	var tokenString string
 	
@@ -187,6 +224,9 @@ func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *ht
 		http.Error(w, "Invalid token", http.StatusUnauthorized)
 		return
 	}
+
+	// Get or create session manager for this session
+	manager := GetOrCreateSessionManager(sessionID)
 
 	// making Upgrader
 	upgarder := websocket.Upgrader{
@@ -219,6 +259,7 @@ func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *ht
 		Conn: conn,
 		Send: make(chan []byte, 512), // Increased buffer for better handling
 		ID: userEmail, // using actual user email instead of remote address
+		SessionID: sessionID,
 		Data: data,
 	}
 
@@ -230,6 +271,8 @@ func(manager *WebSocketManager) HandleWBConnections(w http.ResponseWriter, r *ht
 
 	// Handle user data after adding client to the map
 	go manager.HandleUserData(client)
+	
+	log.Printf("User %s connected to session %s", userName, sessionID)
 }
 
 func (manager *WebSocketManager) HandleDeleteUser(client *Client) {
@@ -362,20 +405,31 @@ func(manager *WebSocketManager) HandleClientWrite(client *Client) {
 		client.Conn.Close()
 	}()
 
-	for {
-		select{
-			case message, ok := <-client.Send:
-				if !ok {
-					client.Conn.WriteMessage(websocket.CloseMessage, []byte{})
-					return
-				}
+	for message := range client.Send {
+		// Send each message separately to avoid JSON concatenation issues
+		err := client.Conn.WriteMessage(websocket.TextMessage, message)
+		if err != nil {
+			log.Printf("websocket write error: %v", err)
+			return
+		}
+	}
+}
 
-				// Send each message separately to avoid JSON concatenation issues
-				err := client.Conn.WriteMessage(websocket.TextMessage, message)
-				if err != nil {
-					log.Printf("websocket write error: %v", err)
-					return
-				}
+// Clean up empty session managers
+func cleanupEmptySession(sessionID string) {
+	time.Sleep(5 * time.Second) // Wait a bit to avoid premature cleanup
+	
+	sessionMutex.Lock()
+	defer sessionMutex.Unlock()
+	
+	if manager, exists := sessionManagers[sessionID]; exists {
+		manager.Mutex.RLock()
+		clientCount := len(manager.Clients)
+		manager.Mutex.RUnlock()
+		
+		if clientCount == 0 {
+			delete(sessionManagers, sessionID)
+			log.Printf("Cleaned up empty session manager: %s", sessionID)
 		}
 	}
 }

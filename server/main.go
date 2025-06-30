@@ -51,12 +51,9 @@ func main() {
 
 	// r.LoadHTMLFiles("chat.html")
 
-	ws := socket.NewWebSocketManager()
-	go ws.Run()
-
-	// WebSocket route
+	// WebSocket route - no longer need to create a single manager
 	r.GET("/ws", func(c *gin.Context) {
-		ws.HandleWBConnections(c.Writer, c.Request)
+		socket.HandleWBConnections(c.Writer, c.Request)
 	})
 
 	// Chat route
