@@ -2,6 +2,7 @@
 import React, { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { throttle, debounce } from "./utils";
+import Toast from "./components/Toast";
 
 type UserDataType = {
   userId: string | null;
@@ -51,6 +52,18 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
   });
   const [userCursors, setUserCursors] = useState<Array<UserCursor>>([]);
   const [users, setUsers] = useState<Array<UserDataType>>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+    isVisible: boolean;
+  }>({
+    message: "",
+    type: "info",
+    isVisible: false,
+  });
 
   const throttleRef = useRef(
     throttle((payload: ContentPayload) => {
@@ -255,6 +268,9 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
   useEffect(() => {
     if (!isClient) return;
 
+    // Load saved document when component mounts
+    loadDocument();
+
     // Get JWT token from localStorage
     const token = localStorage.getItem("authToken");
     if (!token) {
@@ -307,7 +323,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
     //   y: rect?.top,
     // });
 
-    // console.log(e.currentTarget.innerHTML);
+    // console.log(e.currentTarget);
     const payload: ContentPayload = {
       content: e.currentTarget.innerHTML,
       position: { x: rect.left, y: rect.top },
@@ -316,6 +332,157 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
 
     throttleRef.current(payload);
     debounceRef.current(payload);
+  };
+
+  // Save document function
+  const saveDocument = async () => {
+    if (!contentArea.current || !isClient) return;
+
+    // Check if document has content
+    const textContent = contentArea.current.textContent?.trim() || "";
+    if (textContent.length === 0) {
+      showToast("Please write something before saving", "error");
+      return;
+    }
+
+    setIsSaving(true);
+    showToast("Saving document...", "info");
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        showToast("Not authenticated", "error");
+        setIsSaving(false);
+        return;
+      }
+
+      const response = await fetch("http://localhost:8080/api/documents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          docId: sessionId,
+          content: contentArea.current.innerHTML,
+        }),
+      });
+
+      if (response.ok) {
+        showToast("Document saved successfully!", "success");
+      } else {
+        const errorData = await response.json();
+        showToast(errorData.error || "Failed to save document", "error");
+      }
+    } catch (error) {
+      console.error("Save error:", error);
+      showToast("Failed to save document", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Load document function
+  const loadDocument = async () => {
+    if (!isClient) return;
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      const response = await fetch(
+        `http://localhost:8080/api/documents/${sessionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const docData = await response.json();
+        if (contentArea.current && docData.content) {
+          contentArea.current.innerHTML = docData.content;
+        }
+      }
+      // If document doesn't exist (404), that's fine - start with empty document
+    } catch (error) {
+      console.error("Load error:", error);
+    }
+  };
+
+  // Get user documents function
+  const getUserDocuments = async () => {
+    if (!isClient) return [];
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) return [];
+
+      const response = await fetch("http://localhost:8080/api/documents", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.documents || [];
+      }
+    } catch (error) {
+      console.error("Error fetching documents:", error);
+    }
+    return [];
+  };
+
+  // Load user documents for sidebar
+  const loadUserDocuments = async () => {
+    const docs = await getUserDocuments();
+    setUserDocuments(docs);
+  };
+
+  // Load a specific document
+  const loadSpecificDocument = async (docId: string) => {
+    if (!isClient) return;
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      const response = await fetch(
+        `http://localhost:8080/api/documents/${docId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const docData = await response.json();
+        if (contentArea.current && docData.content) {
+          contentArea.current.innerHTML = docData.content;
+        }
+        // Update the URL to reflect the new document
+        window.history.pushState({}, "", `/doc/${docId}`);
+        setShowSidebar(false);
+      }
+    } catch (error) {
+      console.error("Load error:", error);
+    }
+  };
+
+  // Toast helper function
+  const showToast = (message: string, type: "success" | "error" | "info") => {
+    setToast({
+      message,
+      type,
+      isVisible: true,
+    });
+  };
+
+  const hideToast = () => {
+    setToast((prev) => ({ ...prev, isVisible: false }));
   };
 
   // Prevent hydration mismatch by not rendering until client-side
@@ -344,6 +511,84 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
           style={{ animationDuration: "6s" }}
         ></div>
       </div>
+
+      {/* Sidebar */}
+      {showSidebar && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowSidebar(false)}
+          ></div>
+
+          {/* Sidebar Content */}
+          <div className="relative z-10 w-80 bg-white/10 backdrop-blur-md border-r border-white/20 shadow-2xl overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">My Documents</h2>
+                <button
+                  onClick={() => setShowSidebar(false)}
+                  className="p-2 text-white/70 hover:text-white transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {userDocuments.length === 0 ? (
+                  <div className="text-white/60 text-center py-8">
+                    No saved documents yet
+                  </div>
+                ) : (
+                  userDocuments.map((doc: any) => (
+                    <div
+                      key={doc.id}
+                      className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/20 transition-all duration-200 cursor-pointer"
+                      onClick={() => loadSpecificDocument(doc.docId)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-white font-medium">
+                            Doc: {doc.docId}
+                          </h3>
+                          <p className="text-white/60 text-sm">
+                            {new Date(doc.updatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <svg
+                          className="w-4 h-4 text-white/60"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Glassmorphism Header */}
       <header className="relative z-10 backdrop-blur-md bg-white/10 border-b border-white/20 shadow-lg">
@@ -385,6 +630,73 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
           </div>
 
           <div className="flex items-center gap-6">
+            {/* Save Button and Status */}
+            <div className="flex items-center gap-3">
+              {/* My Documents Button */}
+              <button
+                onClick={() => {
+                  setShowSidebar(!showSidebar);
+                  if (!showSidebar) {
+                    loadUserDocuments();
+                  }
+                }}
+                className="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 backdrop-blur-sm text-blue-100 rounded-xl transition-all duration-200 font-medium border border-blue-400/30 hover:border-blue-400/50 shadow-lg"
+                title="My saved documents"
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 011-1h1a2 2 0 011 1v2M7 7h10"
+                    />
+                  </svg>
+                  My Docs
+                </div>
+              </button>
+
+              <button
+                onClick={saveDocument}
+                disabled={isSaving}
+                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 border ${
+                  isSaving
+                    ? "bg-gray-400/20 text-gray-300 cursor-not-allowed border-gray-400/30"
+                    : "bg-green-500/20 hover:bg-green-500/30 text-green-100 border-green-400/30 hover:border-green-400/50 shadow-lg hover:shadow-xl"
+                }`}
+                title="Save document"
+              >
+                {isSaving ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Saving...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 0V4a1 1 0 00-1-1H9a1 1 0 00-1 1v3m1 0h4m-4 0V4h4v3"
+                      />
+                    </svg>
+                    Save
+                  </div>
+                )}
+              </button>
+            </div>
+
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/20">
               <span className="text-sm text-white/80">Session ID:</span>
               <span className="font-mono text-white font-medium ml-2">
@@ -490,6 +802,15 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
           })}
         </div>
       </main>
+
+      {/* Toast Notification */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+        duration={toast.type === "error" ? 5000 : 3000}
+      />
     </div>
   );
 };

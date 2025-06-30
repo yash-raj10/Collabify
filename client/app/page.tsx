@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./contexts/AuthContext";
 import { AuthModal } from "./components/AuthModal";
@@ -11,6 +11,27 @@ export default function Home() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [joinType, setJoinType] = useState<"excalidraw" | "doc">("excalidraw");
+  const [particles, setParticles] = useState<
+    Array<{
+      id: number;
+      left: string;
+      top: string;
+      animationDelay: string;
+      animationDuration: string;
+    }>
+  >([]);
+
+  useEffect(() => {
+    // Generate particles on client-side only to avoid hydration mismatch
+    const generatedParticles = Array.from({ length: 20 }).map((_, i) => ({
+      id: i,
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 3}s`,
+      animationDuration: `${2 + Math.random() * 2}s`,
+    }));
+    setParticles(generatedParticles);
+  }, []);
 
   const generateId = () => {
     return (
@@ -54,15 +75,15 @@ export default function Home() {
 
       {/* Glassmorphism particles */}
       <div className="absolute inset-0">
-        {Array.from({ length: 20 }).map((_, i) => (
+        {particles.map((particle) => (
           <div
-            key={i}
+            key={particle.id}
             className="absolute w-2 h-2 bg-white/10 rounded-full animate-pulse"
             style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              animationDuration: `${2 + Math.random() * 2}s`,
+              left: particle.left,
+              top: particle.top,
+              animationDelay: particle.animationDelay,
+              animationDuration: particle.animationDuration,
             }}
           />
         ))}

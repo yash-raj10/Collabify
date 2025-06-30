@@ -2,6 +2,8 @@ package main
 
 import (
 	"collabify-backend/auth"
+	"collabify-backend/docs"
+	"collabify-backend/drawings"
 	"collabify-backend/socket"
 	"log"
 
@@ -34,6 +36,13 @@ func main() {
 	// Get users collection and pass it to socket package
 	usersCollection := auth.GetUsersCollection()
 	socket.SetUsersCollection(usersCollection)
+
+	// Get database client and setup collections
+	client := usersCollection.Database().Client()
+	docsCollection := client.Database("collabify").Collection("documents")
+	drawingsCollection := client.Database("collabify").Collection("drawings")
+	docs.SetDocsCollection(docsCollection)
+	drawings.SetDrawingsCollection(drawingsCollection)
 
 	r := gin.Default()
 
@@ -68,7 +77,18 @@ func main() {
 	api.Use(auth.AuthMiddleware())
 	{
 		api.GET("/profile", auth.GetProfile)
-		// Add more protected routes here as needed
+		
+		// Document routes
+		api.POST("/documents", docs.SaveDocument)
+		api.GET("/documents", docs.GetUserDocuments)
+		api.GET("/documents/:docId", docs.GetDocument)
+		api.DELETE("/documents/:docId", docs.DeleteDocument)
+
+		// Drawing routes
+		api.POST("/drawings", drawings.SaveDrawing)
+		api.GET("/drawings", drawings.GetUserDrawings)
+		api.GET("/drawings/:drawingId", drawings.GetDrawing)
+		api.DELETE("/drawings/:drawingId", drawings.DeleteDrawing)
 	}
 
 	r.Run(":8080")

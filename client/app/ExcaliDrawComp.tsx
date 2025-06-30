@@ -6,6 +6,7 @@ import {
 } from "@excalidraw/excalidraw";
 import { useRouter } from "next/navigation";
 import { throttle, debounce } from "./utils";
+import Toast from "./components/Toast";
 
 import "@excalidraw/excalidraw/index.css";
 
@@ -58,28 +59,49 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
   });
   const [userCursors, setUserCursors] = useState<Array<UserCursor>>([]);
   const [users, setUsers] = useState<Array<UserDataType>>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [userDrawings, setUserDrawings] = useState<any[]>([]);
+  const [currentElements, setCurrentElements] = useState<any[]>([]);
+  const [currentAppState, setCurrentAppState] = useState<any>({
+    collaborators: new Map(),
+  });
+  const [initialData, setInitialData] = useState<any>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    type: "success" | "error" | "info";
+    isVisible: boolean;
+  }>({
+    message: "",
+    type: "info",
+    isVisible: false,
+  });
 
   const throttleRef = useRef(
     throttle((payload: ContentPayload) => {
       console.log("throttle", payload);
-      ws.current?.send(
-        JSON.stringify({
-          type: "content",
-          data: payload,
-        })
-      );
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(
+          JSON.stringify({
+            type: "content",
+            data: payload,
+          })
+        );
+      }
     }, 100)
   );
 
   const debounceRef = useRef(
     debounce((payload: ContentPayload) => {
       console.log("debounce", payload);
-      ws.current?.send(
-        JSON.stringify({
-          type: "content",
-          data: payload,
-        })
-      );
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(
+          JSON.stringify({
+            type: "content",
+            data: payload,
+          })
+        );
+      }
     }, 300)
   );
 
@@ -226,9 +248,212 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
     setIsClient(true);
   }, []);
 
+  // Toast helper functions
+  const showToast = (message: string, type: "success" | "error" | "info") => {
+    setToast({
+      message,
+      type,
+      isVisible: true,
+    });
+  };
+
+  const hideToast = () => {
+    setToast((prev) => ({ ...prev, isVisible: false }));
+  };
+
+  // Save drawing function
+  const saveDrawing = async () => {
+    if (!isClient || currentElements.length === 0) {
+      showToast("Please draw something before saving", "error");
+      return;
+    }
+
+    setIsSaving(true);
+    showToast("Saving drawing...", "info");
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        showToast("Not authenticated", "error");
+        setIsSaving(false);
+        return;
+      }
+
+      // For saving, we need to serialize the appState properly
+      // Remove or convert non-serializable data like Maps
+      const serializableAppState = {
+        ...currentAppState,
+        collaborators: undefined, // Don't save collaborators as they're runtime data
+      };
+
+      const drawingData = {
+        elements: currentElements,
+        appState: serializableAppState,
+        timestamp: new Date().toISOString(),
+        sessionId: sessionId,
+        userId: userDataRef.current.userId,
+      };
+
+      const response = await fetch("http://localhost:8080/api/drawings", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          drawingId: sessionId,
+          content: JSON.stringify(drawingData),
+        }),
+      });
+
+      if (response.ok) {
+        showToast("Drawing saved successfully!", "success");
+      } else {
+        const errorData = await response.json();
+        showToast(errorData.error || "Failed to save drawing", "error");
+      }
+    } catch (error) {
+      console.error("Save error:", error);
+      showToast("Failed to save drawing", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Load drawing function
+  const loadDrawing = async () => {
+    if (!isClient) return;
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      const response = await fetch(
+        `http://localhost:8080/api/drawings/${sessionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const drawingData = await response.json();
+        if (drawingData.content) {
+          const parsedContent = JSON.parse(drawingData.content);
+          if (parsedContent.elements) {
+            setCurrentElements(parsedContent.elements);
+
+            // Ensure appState has the correct structure for Excalidraw
+            const appState = {
+              ...parsedContent.appState,
+              collaborators: new Map(), // Excalidraw expects a Map for collaborators
+            };
+            setCurrentAppState(appState);
+
+            // Set initial data for Excalidraw to render
+            setInitialData({
+              elements: parsedContent.elements,
+              appState: appState,
+            });
+          }
+        }
+      }
+      // If drawing doesn't exist (404), that's fine - start with empty drawing
+    } catch (error) {
+      console.error("Load error:", error);
+    }
+  };
+
+  // Get user drawings function
+  const getUserDrawings = async () => {
+    if (!isClient) return [];
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) return [];
+
+      const response = await fetch("http://localhost:8080/api/drawings", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.drawings || [];
+      }
+    } catch (error) {
+      console.error("Error fetching drawings:", error);
+    }
+    return [];
+  };
+
+  // Load user drawings for sidebar
+  const loadUserDrawings = async () => {
+    const drawings = await getUserDrawings();
+    setUserDrawings(drawings);
+  };
+
+  // Load a specific drawing
+  const loadSpecificDrawing = async (drawingId: string) => {
+    if (!isClient) return;
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      const response = await fetch(
+        `http://localhost:8080/api/drawings/${drawingId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.ok) {
+        const drawingData = await response.json();
+        if (drawingData.content) {
+          const parsedContent = JSON.parse(drawingData.content);
+          if (parsedContent.elements) {
+            setCurrentElements(parsedContent.elements);
+
+            // Ensure appState has the correct structure for Excalidraw
+            const appState = {
+              ...parsedContent.appState,
+              collaborators: new Map(), // Excalidraw expects a Map for collaborators
+            };
+            setCurrentAppState(appState);
+
+            // Set initial data for Excalidraw to render
+            setInitialData({
+              elements: parsedContent.elements,
+              appState: appState,
+            });
+          }
+        }
+        // Update the URL to reflect the new drawing
+        window.history.pushState({}, "", `/excalidraw/${drawingId}`);
+        setShowSidebar(false);
+      }
+    } catch (error) {
+      console.error("Load error:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (initialData) {
+      console.log("Initial data updated:", initialData);
+    }
+  }, [initialData]);
+
   useEffect(() => {
     const connectWebSocket = () => {
       if (!isClient) return;
+
+      // Load saved drawing when component mounts
+      loadDrawing();
 
       // Get JWT token from localStorage
       const token = localStorage.getItem("authToken");
@@ -249,8 +474,8 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
         setIsConnected(true);
       });
 
-      ws.current.addEventListener("close", () => {
-        console.log("WebSocket connection closed");
+      ws.current.addEventListener("close", (event) => {
+        console.log("WebSocket connection closed", event.code, event.reason);
         setIsConnected(false);
       });
 
@@ -263,7 +488,9 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
 
       return () => {
         if (ws.current) {
+          console.log("Cleaning up WebSocket connection");
           ws.current.close();
+          setIsConnected(false);
         }
       };
     };
@@ -275,7 +502,10 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
     if (
       payload.pointer &&
       payload.pointer.x !== undefined &&
-      payload.pointer.y !== undefined
+      payload.pointer.y !== undefined &&
+      isConnected && // Only send if WebSocket is connected
+      ws.current &&
+      ws.current.readyState === WebSocket.OPEN
     ) {
       const position = {
         x: payload.pointer.x,
@@ -291,6 +521,33 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
       throttleRef.current(contentPayload);
       debounceRef.current(contentPayload);
     }
+  };
+
+  // Handle Excalidraw changes and log as JSON
+  const handleExcalidrawChange = (elements: any, appState: any) => {
+    // Update current state for saving
+    setCurrentElements(elements);
+    setCurrentAppState(appState);
+
+    // For saving, we need to serialize the appState properly
+    // Remove or convert non-serializable data like Maps
+    const serializableAppState = {
+      ...appState,
+      collaborators: undefined, // Don't save collaborators as they're runtime data
+    };
+
+    const excalidrawData = {
+      elements: elements,
+      appState: serializableAppState,
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId,
+      userId: userDataRef.current.userId,
+    };
+
+    console.log(
+      "Excalidraw Data (JSON):",
+      JSON.stringify(excalidrawData, null, 2)
+    );
   };
 
   console.info(
@@ -330,6 +587,84 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
           style={{ animationDuration: "6s" }}
         ></div>
       </div>
+
+      {/* Sidebar */}
+      {showSidebar && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowSidebar(false)}
+          ></div>
+
+          {/* Sidebar Content */}
+          <div className="relative z-10 w-80 bg-white/10 backdrop-blur-md border-r border-white/20 shadow-2xl overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">My Drawings</h2>
+                <button
+                  onClick={() => setShowSidebar(false)}
+                  className="p-2 text-white/70 hover:text-white transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {userDrawings.length === 0 ? (
+                  <div className="text-white/60 text-center py-8">
+                    No saved drawings yet
+                  </div>
+                ) : (
+                  userDrawings.map((drawing: any) => (
+                    <div
+                      key={drawing.id}
+                      className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/20 transition-all duration-200 cursor-pointer"
+                      onClick={() => loadSpecificDrawing(drawing.drawingId)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-white font-medium">
+                            Drawing: {drawing.drawingId}
+                          </h3>
+                          <p className="text-white/60 text-sm">
+                            {new Date(drawing.updatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <svg
+                          className="w-4 h-4 text-white/60"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Glassmorphism Header */}
       <header className="relative z-10 backdrop-blur-md bg-white/10 border-b border-white/20 shadow-lg">
@@ -371,6 +706,74 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
           </div>
 
           <div className="flex items-center gap-6">
+            {/* Save Button and My Drawings */}
+            <div className="flex items-center gap-3">
+              {/* My Drawings Button */}
+              <button
+                onClick={() => {
+                  setShowSidebar(!showSidebar);
+                  if (!showSidebar) {
+                    loadUserDrawings();
+                  }
+                }}
+                className="px-4 py-2 bg-purple-500/20 hover:bg-purple-500/30 backdrop-blur-sm text-purple-100 rounded-xl transition-all duration-200 font-medium border border-purple-400/30 hover:border-purple-400/50 shadow-lg"
+                title="My saved drawings"
+              >
+                <div className="flex items-center gap-2">
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 011-1h1a2 2 0 011 1v2M7 7h10"
+                    />
+                  </svg>
+                  My Drawings
+                </div>
+              </button>
+
+              {/* Save Button */}
+              <button
+                onClick={saveDrawing}
+                disabled={isSaving}
+                className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 border ${
+                  isSaving
+                    ? "bg-gray-400/20 text-gray-300 cursor-not-allowed border-gray-400/30"
+                    : "bg-green-500/20 hover:bg-green-500/30 text-green-100 border-green-400/30 hover:border-green-400/50 shadow-lg hover:shadow-xl"
+                }`}
+                title="Save drawing"
+              >
+                {isSaving ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Saving...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 0V4a1 1 0 00-1-1H9a1 1 0 00-1 1v3m1 0h4m-4 0V4h4v3"
+                      />
+                    </svg>
+                    Save
+                  </div>
+                )}
+              </button>
+            </div>
+
             <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/20">
               <span className="text-sm text-white/80">Session ID:</span>
               <span className="font-mono text-white font-medium ml-2">
@@ -435,7 +838,12 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
           className="relative bg-white/95 backdrop-blur-sm rounded-2xl m-4 shadow-2xl border border-white/20"
           style={{ height: "calc(100vh - 120px)" }}
         >
-          <Excalidraw onPointerUpdate={handlePointerUpdate} />
+          <Excalidraw
+            key={sessionId + (initialData ? "loaded" : "empty")}
+            onPointerUpdate={handlePointerUpdate}
+            onChange={handleExcalidrawChange}
+            initialData={initialData}
+          />
 
           {/* User Cursors */}
           {userCursors.map((item: UserCursor, index: number) => {
@@ -492,6 +900,14 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
           })}
         </div>
       </main>
+
+      {/* Toast Notification */}
+      <Toast
+        message={toast.message}
+        type={toast.type}
+        isVisible={toast.isVisible}
+        onClose={hideToast}
+      />
     </div>
   );
 };
