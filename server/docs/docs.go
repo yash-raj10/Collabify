@@ -10,7 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-// Document represents a saved document
 type Document struct {
 	ID          interface{} `json:"id" bson:"_id,omitempty"`
 	DocID       string      `json:"docId" bson:"docId"`
@@ -26,11 +25,6 @@ type SaveDocumentRequest struct {
 	Content string `json:"content" binding:"required"`
 }
 
-// UpdateDocumentRequest represents the request body for updating a document
-type UpdateDocumentRequest struct {
-	Content string `json:"content" binding:"required"`
-}
-
 var docsCollection *mongo.Collection
 
 // SetDocsCollection sets the documents collection
@@ -38,7 +32,7 @@ func SetDocsCollection(collection *mongo.Collection) {
 	docsCollection = collection
 }
 
-// SaveDocument saves a new document or updates existing one
+// saves a new document or updates existing one
 func SaveDocument(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {
@@ -52,7 +46,7 @@ func SaveDocument(c *gin.Context) {
 		return
 	}
 
-	// Check if document already exists for this user and docId
+	// check if document already exists for this user and docId
 	var existingDoc Document
 	filter := bson.M{
 		"docId":     req.DocID,
@@ -62,7 +56,7 @@ func SaveDocument(c *gin.Context) {
 	err := docsCollection.FindOne(context.Background(), filter).Decode(&existingDoc)
 	
 	if err == nil {
-		// Document exists, update it
+		// doc exists, update it
 		update := bson.M{
 			"$set": bson.M{
 				"content":   req.Content,
@@ -86,7 +80,7 @@ func SaveDocument(c *gin.Context) {
 		return
 	}
 
-	// Document doesn't exist, create new one
+	// doc doesn't exist, create new one
 	doc := Document{
 		DocID:     req.DocID,
 		Content:   req.Content,
@@ -108,7 +102,7 @@ func SaveDocument(c *gin.Context) {
 	})
 }
 
-// GetDocument retrieves a specific document
+// retrieves a specific document
 func GetDocument(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {
@@ -141,7 +135,7 @@ func GetDocument(c *gin.Context) {
 	c.JSON(http.StatusOK, doc)
 }
 
-// GetUserDocuments retrieves all documents for the current user
+// retrieves all documents for the current user
 func GetUserDocuments(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {
@@ -172,7 +166,6 @@ func GetUserDocuments(c *gin.Context) {
 	})
 }
 
-// DeleteDocument deletes a specific document
 func DeleteDocument(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {

@@ -10,7 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// CORS middleware
+// cors middleware
 func CORSMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -28,16 +28,16 @@ func CORSMiddleware() gin.HandlerFunc {
 }
 
 func main() {
-	// Initialize MongoDB
+	// init MongoDB
 	if err := auth.InitMongoDB(); err != nil {
 		log.Fatal("Failed to connect to MongoDB:", err)
 	}
 
-	// Get users collection and pass it to socket package
+	// get users collection and pass it to socket package
 	usersCollection := auth.GetUsersCollection()
 	socket.SetUsersCollection(usersCollection)
 
-	// Get database client and setup collections
+	// 	setup collections and setup docs/draws collection
 	client := usersCollection.Database().Client()
 	docsCollection := client.Database("collabify").Collection("documents")
 	drawingsCollection := client.Database("collabify").Collection("drawings")
@@ -46,12 +46,11 @@ func main() {
 
 	r := gin.Default()
 
-	// Add CORS middleware
 	r.Use(CORSMiddleware())
 
 	// r.LoadHTMLFiles("chat.html")
 
-	// WebSocket route - no longer need to create a single manager
+	// WebSocket route 
 	r.GET("/ws", func(c *gin.Context) {
 		socket.HandleWBConnections(c.Writer, c.Request)
 	})
@@ -62,26 +61,25 @@ func main() {
 	// 		"title": "Chat Room"})
 	// })
 
-	// Authentication routes
+	// auth routes
 	authGroup := r.Group("/api/auth")
 	{
 		authGroup.POST("/register", auth.Register)
 		authGroup.POST("/login", auth.Login)
 	}
 
-	// Protected routes
 	api := r.Group("/api")
 	api.Use(auth.AuthMiddleware())
 	{
 		api.GET("/profile", auth.GetProfile)
 		
-		// Document routes
+		// docs routes
 		api.POST("/documents", docs.SaveDocument)
 		api.GET("/documents", docs.GetUserDocuments)
 		api.GET("/documents/:docId", docs.GetDocument)
 		api.DELETE("/documents/:docId", docs.DeleteDocument)
 
-		// Drawing routes
+		// drawings routes
 		api.POST("/drawings", drawings.SaveDrawing)
 		api.GET("/drawings", drawings.GetUserDrawings)
 		api.GET("/drawings/:drawingId", drawings.GetDrawing)

@@ -10,7 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-// Drawing represents a saved ExcaliDraw drawing
 type Drawing struct {
 	ID          interface{} `json:"id" bson:"_id,omitempty"`
 	DrawingID   string      `json:"drawingId" bson:"drawingId"`
@@ -20,7 +19,7 @@ type Drawing struct {
 	UpdatedAt   time.Time   `json:"updatedAt" bson:"updatedAt"`
 }
 
-// SaveDrawingRequest represents the request body for saving a drawing
+// represents the request body for saving a drawing
 type SaveDrawingRequest struct {
 	DrawingID string `json:"drawingId" binding:"required"`
 	Content   string `json:"content" binding:"required"`
@@ -28,12 +27,12 @@ type SaveDrawingRequest struct {
 
 var drawingsCollection *mongo.Collection
 
-// SetDrawingsCollection sets the drawings collection
+//  sets the drawings collection
 func SetDrawingsCollection(collection *mongo.Collection) {
 	drawingsCollection = collection
 }
 
-// SaveDrawing saves a new drawing or updates existing one
+// saves a new drawing or updates existing one
 func SaveDrawing(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {
@@ -47,7 +46,7 @@ func SaveDrawing(c *gin.Context) {
 		return
 	}
 
-	// Check if drawing already exists for this user and drawingId
+	// check if drawing already exists for this user and drawingId
 	var existingDrawing Drawing
 	filter := bson.M{
 		"drawingId": req.DrawingID,
@@ -57,7 +56,7 @@ func SaveDrawing(c *gin.Context) {
 	err := drawingsCollection.FindOne(context.Background(), filter).Decode(&existingDrawing)
 	
 	if err == nil {
-		// Drawing exists, update it
+		// exists, update it
 		update := bson.M{
 			"$set": bson.M{
 				"content":   req.Content,
@@ -71,7 +70,7 @@ func SaveDrawing(c *gin.Context) {
 			return
 		}
 
-		// Return updated drawing
+		// updated drawing
 		existingDrawing.Content = req.Content
 		existingDrawing.UpdatedAt = time.Now()
 		c.JSON(http.StatusOK, gin.H{
@@ -81,7 +80,7 @@ func SaveDrawing(c *gin.Context) {
 		return
 	}
 
-	// Drawing doesn't exist, create new one
+	// doesn't exist, create new one
 	drawing := Drawing{
 		DrawingID: req.DrawingID,
 		Content:   req.Content,
@@ -103,7 +102,7 @@ func SaveDrawing(c *gin.Context) {
 	})
 }
 
-// GetDrawing retrieves a specific drawing
+// retrieves a specific drawing
 func GetDrawing(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {
@@ -136,7 +135,7 @@ func GetDrawing(c *gin.Context) {
 	c.JSON(http.StatusOK, drawing)
 }
 
-// GetUserDrawings retrieves all drawings for the current user
+// retrieves all drawings for the current user
 func GetUserDrawings(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {
@@ -167,7 +166,6 @@ func GetUserDrawings(c *gin.Context) {
 	})
 }
 
-// DeleteDrawing deletes a specific drawing
 func DeleteDrawing(c *gin.Context) {
 	userEmail, exists := c.Get("user_email")
 	if !exists {
