@@ -90,8 +90,8 @@ func extractUserFromToken(tokenString string) (string, string, error) {
 }
 
 // Get random animal emoji
+
 func getRandomAnimalEmoji() string {
-	rand.Seed(time.Now().UnixNano())
 	return animalEmojis[rand.Intn(len(animalEmojis))]
 }
 
@@ -225,7 +225,7 @@ func HandleWBConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get or create session manager for this session
+	// Always allow WebSocket connection - let the session manager handle optimization
 	manager := GetOrCreateSessionManager(sessionID)
 
 	// making Upgrader
@@ -359,6 +359,16 @@ func(manager *WebSocketManager) HandleClientRead(client *Client) {
 				log.Printf("websocket read error: %v", err)
 			}
 			break // exit the loop on error
+		}
+
+		// Check if there are other clients before processing message
+		manager.Mutex.RLock()
+		clientCount := len(manager.Clients)
+		manager.Mutex.RUnlock()
+
+		// Only process and broadcast if there are multiple clients
+		if clientCount <= 1 {
+			continue // Skip processing if user is alone
 		}
 
 		// First, parse just the type to determine message structure

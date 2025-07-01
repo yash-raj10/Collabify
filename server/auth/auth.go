@@ -53,7 +53,6 @@ func InitMongoDB() error {
 	defer cancel()
 
 	mongoURI := ""
-	
 	client, err := mongo.Connect(options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		return err
