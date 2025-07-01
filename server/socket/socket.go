@@ -36,15 +36,21 @@ type UserData struct {
 	UserColor string `json:"userColor"`
 }
 
-var JWT_KEY   string 
+var JWT_KEY string
 
-func init(){
+func init() {
 	_ = godotenv.Load()
 	JWT_KEY = os.Getenv("JWT_KEY")
+	if JWT_KEY == "" {
+		log.Printf("Warning: JWT_KEY not found in environment, using default")
+		JWT_KEY = "your-secret-key" // Fallback for development
+	}
+	jwtSecret = []byte(JWT_KEY) // Set the global jwtSecret
+	log.Printf("JWT_KEY loaded successfully")
 }
 
 var (
-	jwtSecret = []byte(JWT_KEY) // should match auth package
+	jwtSecret []byte // Will be set from environment variable
 	animalEmojis = []string{"🦁", "🐮", "🐯", "🐰", "🐻", "🐼", "🐨", "🐸", "🐷", "🐵", "🦊", "🐺", "🐴", "🦄", "🐧", "🐦", "🦅", "🦆", "🐔", "🐢"}
 	usersCollection *mongo.Collection // Will be set from main package
 )
@@ -185,11 +191,13 @@ func(manager *WebSocketManager) Run(){
 
 		case message := <- manager.Broadcast:
 			manager.Mutex.RLock()
-			log.Printf("Broadcasting message to %d clients", len(manager.Clients))
+			clientCount := len(manager.Clients)
+			log.Printf("Broadcasting message to %d clients", clientCount)
+			
 			for client := range manager.Clients{
 				select {
 				case client.Send <- message:
-
+					// Message sent successfully
 				default:
 					log.Printf("Client %s send channel is full, removing client", client.ID)
 					close(client.Send)
@@ -202,6 +210,7 @@ func(manager *WebSocketManager) Run(){
 }
 
 func HandleWBConnections(w http.ResponseWriter, r *http.Request) {
+	
 	// extract session id
 	sessionID := r.URL.Query().Get("session")
 	if sessionID == "" {
@@ -238,7 +247,7 @@ func HandleWBConnections(w http.ResponseWriter, r *http.Request) {
 		ReadBufferSize: 1024,
 		WriteBufferSize: 1024,
 		CheckOrigin: func(r *http.Request) bool {
-			// allow all origins 
+			log.Printf("WebSocket upgrade request from origin: %s", r.Header.Get("Origin"))
 			return true 
 		},
 	}
@@ -276,7 +285,7 @@ func HandleWBConnections(w http.ResponseWriter, r *http.Request) {
 	// Handle user data after adding client to the map
 	go manager.HandleUserData(client)
 	
-	log.Printf("User %s connected to session %s", userName, sessionID)
+	log.Printf("User %s connected to session %s successfully", userName, sessionID)
 }
 
 func (manager *WebSocketManager) HandleDeleteUser(client *Client) {
@@ -333,21 +342,28 @@ func(manager *WebSocketManager) HandleUserData(client *Client) {
 	}
 	manager.Mutex.RUnlock()
 
-	//3. announce new client to all other clinets
-	newUserMessage := ChatMessage{
-		Data: client.Data,
-		Type: "user-added",
-	}
-	newUserData, err := json.Marshal(newUserMessage)
-	if err != nil {
-		log.Printf("error marshelling new user announcement: %v", err)
-		return
-	}
+	//3. announce new client to all other clients (only if there are other clients)
+	manager.Mutex.RLock()
+	clientCount := len(manager.Clients)
+	manager.Mutex.RUnlock()
 
+	if clientCount > 1 {
+		newUserMessage := ChatMessage{
+			Data: client.Data,
+			Type: "user-added",
+		}
+		newUserData, err := json.Marshal(newUserMessage)
+		if err != nil {
+			log.Printf("error marshalling new user announcement: %v", err)
+			return
+		}
 
-	// broadcast to all clients
-	manager.Broadcast <- newUserData
-	log.Printf("Announced new user %s to all clients", client.ID)
+		// Broadcast to all clients
+		manager.Broadcast <- newUserData
+		log.Printf("Announced new user %s to all clients", client.ID)
+	} else {
+		log.Printf("Skipping user announcement - only one client in session")
+	}
 }
 
 func(manager *WebSocketManager) HandleClientRead(client *Client) {
@@ -365,17 +381,7 @@ func(manager *WebSocketManager) HandleClientRead(client *Client) {
 			break 
 		}
 
-		// check if there are other clients before processing message
-		manager.Mutex.RLock()
-		clientCount := len(manager.Clients)
-		manager.Mutex.RUnlock()
-
-		// only process and broadcast if there are multiple clients
-		if clientCount <= 1 {
-			continue // skip processing if user is alone
-		}
-
-		// 1st, parse just the type to determine message structure
+		// First, parse just the type to determine message structure
 		var typeOnly struct {
 			Type string `json:"type"`
 		}
@@ -387,7 +393,17 @@ func(manager *WebSocketManager) HandleClientRead(client *Client) {
 		}
 
 		if typeOnly.Type == "content" {
-			// handle content messages with ContentData structure
+			// Check if there are other clients before processing content messages (optimization)
+			manager.Mutex.RLock()
+			clientCount := len(manager.Clients)
+			manager.Mutex.RUnlock()
+
+			// Only skip content messages if user is alone
+			if clientCount <= 1 {
+				continue // Skip content processing if user is alone
+			}
+
+			// Handle content messages with ContentData structure
 			var contentMsg struct {
 				Type string      `json:"type"`
 				Data ContentData `json:"data"`
@@ -403,11 +419,11 @@ func(manager *WebSocketManager) HandleClientRead(client *Client) {
 				client.ID, contentMsg.Data.UserData.UserId, len(contentMsg.Data.Content), 
 				contentMsg.Data.Position.X, contentMsg.Data.Position.Y)
 
-			// broadcast the original message
+			// Broadcast the original message
 			log.Printf("Broadcasting content message from %s", client.ID)
 			manager.Broadcast <- message
 		} else {
-			// handle other message types (user-data, user-added, etc.)
+			// Always process other message types (user-data, user-added, etc.) for proper WebSocket functionality
 			log.Printf("Received %s message from %s", typeOnly.Type, client.ID)
 			manager.Broadcast <- message
 		}

@@ -171,16 +171,17 @@ export default function Home() {
             {/* Quick Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
               <button
-                onClick={() => createNewSession("excalidraw")}
-                className="px-8 py-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-2xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl backdrop-blur-sm"
-              >
-                🎨 Start Drawing
-              </button>
-              <button
                 onClick={() => createNewSession("doc")}
                 className="px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-2xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl backdrop-blur-sm"
               >
                 📝 Start Writing
+              </button>
+
+              <button
+                onClick={() => createNewSession("excalidraw")}
+                className="px-8 py-4 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-2xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl backdrop-blur-sm"
+              >
+                🎨 Start Drawing
               </button>
             </div>
           </div>
@@ -292,6 +293,74 @@ export default function Home() {
 
             {/* Enhanced Options Cards */}
             <div className="grid lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
+              {/* Doc Online Option */}
+              <div className="group bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-500 transform hover:scale-105 hover:shadow-2xl">
+                <div className="text-center">
+                  <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-teal-500 rounded-3xl mx-auto mb-8 flex items-center justify-center shadow-2xl group-hover:shadow-blue-500/25 transition-all duration-500">
+                    <svg
+                      className="w-12 h-12 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  </div>
+                  <h2 className="text-3xl font-bold text-white mb-4">
+                    Doc Online
+                  </h2>
+                  <p className="text-white/80 mb-8 leading-relaxed text-lg">
+                    Collaborative document editor for writing, note-taking, and
+                    content creation. Edit documents together with live cursor
+                    tracking and instant updates.
+                  </p>
+                  <div className="flex justify-center space-x-6 text-sm text-white/70 mb-8">
+                    <span className="flex items-center bg-white/10 px-3 py-1 rounded-full">
+                      <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
+                      Live editing
+                    </span>
+                    <span className="flex items-center bg-white/10 px-3 py-1 rounded-full">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full mr-2"></div>
+                      Live cursors
+                    </span>
+                    <span className="flex items-center bg-white/10 px-3 py-1 rounded-full">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
+                      Auto-save
+                    </span>
+                  </div>
+                  {/* Action Buttons */}
+                  <div className="space-y-4">
+                    <button
+                      onClick={() => createNewSession("doc")}
+                      className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl text-lg"
+                    >
+                      📝 Create New Session
+                    </button>
+                    <button
+                      onClick={() => openJoinModal("doc")}
+                      className="w-full border-2 border-blue-400/50 text-blue-300 hover:bg-blue-500/20 hover:text-white hover:border-blue-300 font-semibold py-4 px-6 rounded-2xl transition-all duration-300 backdrop-blur-sm text-lg"
+                    >
+                      📎 Join Existing Session
+                    </button>
+                  </div>
+
+                  {/* Doc Online Demo GIF */}
+                  <div className="mt-8 rounded-2xl overflow-hidden border border-white/20 shadow-2xl group-hover:shadow-blue-500/20 transition-all duration-500">
+                    <img
+                      src="/doc.gif"
+                      alt="Doc Online Demo - Collaborative document editing in action"
+                      className="w-full h-auto object-cover"
+                      style={{ maxHeight: "250px" }}
+                    />
+                  </div>
+                </div>
+              </div>
+
               {/* ExcaliDraw Option */}
               <div className="group bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-500 transform hover:scale-105 hover:shadow-2xl">
                 <div className="text-center">
@@ -347,63 +416,15 @@ export default function Home() {
                       📎 Join Existing Session
                     </button>
                   </div>
-                </div>
-              </div>
 
-              {/* Doc Online Option */}
-              <div className="group bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 hover:bg-white/15 transition-all duration-500 transform hover:scale-105 hover:shadow-2xl">
-                <div className="text-center">
-                  <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-teal-500 rounded-3xl mx-auto mb-8 flex items-center justify-center shadow-2xl group-hover:shadow-blue-500/25 transition-all duration-500">
-                    <svg
-                      className="w-12 h-12 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-3xl font-bold text-white mb-4">
-                    Doc Online
-                  </h2>
-                  <p className="text-white/80 mb-8 leading-relaxed text-lg">
-                    Collaborative document editor for writing, note-taking, and
-                    content creation. Edit documents together with live cursor
-                    tracking and instant updates.
-                  </p>
-                  <div className="flex justify-center space-x-6 text-sm text-white/70 mb-8">
-                    <span className="flex items-center bg-white/10 px-3 py-1 rounded-full">
-                      <div className="w-2 h-2 bg-green-400 rounded-full mr-2"></div>
-                      Live editing
-                    </span>
-                    <span className="flex items-center bg-white/10 px-3 py-1 rounded-full">
-                      <div className="w-2 h-2 bg-orange-400 rounded-full mr-2"></div>
-                      Live cursors
-                    </span>
-                    <span className="flex items-center bg-white/10 px-3 py-1 rounded-full">
-                      <div className="w-2 h-2 bg-blue-400 rounded-full mr-2"></div>
-                      Auto-save
-                    </span>
-                  </div>
-                  {/* Action Buttons */}
-                  <div className="space-y-4">
-                    <button
-                      onClick={() => createNewSession("doc")}
-                      className="w-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl text-lg"
-                    >
-                      📝 Create New Session
-                    </button>
-                    <button
-                      onClick={() => openJoinModal("doc")}
-                      className="w-full border-2 border-blue-400/50 text-blue-300 hover:bg-blue-500/20 hover:text-white hover:border-blue-300 font-semibold py-4 px-6 rounded-2xl transition-all duration-300 backdrop-blur-sm text-lg"
-                    >
-                      📎 Join Existing Session
-                    </button>
+                  {/* ExcaliDraw Demo GIF */}
+                  <div className="mt-8 rounded-2xl overflow-hidden border border-white/20 shadow-2xl group-hover:shadow-purple-500/20 transition-all duration-500">
+                    <img
+                      src="/excali.gif"
+                      alt="ExcaliDraw Demo - Collaborative whiteboard in action"
+                      className="w-full h-auto object-cover"
+                      style={{ maxHeight: "250px" }}
+                    />
                   </div>
                 </div>
               </div>
