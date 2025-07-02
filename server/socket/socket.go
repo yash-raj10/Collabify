@@ -41,10 +41,6 @@ var JWT_KEY string
 func init() {
 	_ = godotenv.Load()
 	JWT_KEY = os.Getenv("JWT_KEY")
-	if JWT_KEY == "" {
-		log.Printf("Warning: JWT_KEY not found in environment, using default")
-		JWT_KEY = "your-secret-key" // Fallback for development
-	}
 	jwtSecret = []byte(JWT_KEY) // Set the global jwtSecret
 	log.Printf("JWT_KEY loaded successfully")
 }
