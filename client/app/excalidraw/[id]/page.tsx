@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import ExcaliDrawComp from "../../ExcaliDrawComp";
 import { useAuth } from "../../contexts/AuthContext";
+import Link from "next/link";
 
 interface ExcaliDrawPageProps {
   params: Promise<{
@@ -70,12 +71,12 @@ export default function ExcaliDrawPage({ params }: ExcaliDrawPageProps) {
           <p className="text-white/80 mb-6 leading-relaxed">
             You need to be signed in to access collaborative drawing sessions.
           </p>
-          <a
+          <Link
             href="/"
             className="inline-block px-6 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             Go to Home & Sign In
-          </a>
+          </Link>
         </div>
       </div>
     );

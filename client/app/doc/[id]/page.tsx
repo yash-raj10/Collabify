@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import DocPage from "../../DocPage";
 import { useAuth } from "../../contexts/AuthContext";
+import Link from "next/link";
 
 interface DocumentPageProps {
   params: Promise<{
@@ -70,12 +71,12 @@ export default function DocumentPage({ params }: DocumentPageProps) {
           <p className="text-white/80 mb-6 leading-relaxed">
             You need to be signed in to access collaborative document sessions.
           </p>
-          <a
+          <Link
             href="/"
             className="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white rounded-xl transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:scale-105"
           >
             Go to Home & Sign In
-          </a>
+          </Link>
         </div>
       </div>
     );

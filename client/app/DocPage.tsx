@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { throttle, debounce } from "./utils";
 import Toast from "./components/Toast";
@@ -34,8 +34,6 @@ interface ContentMessage {
   data: ContentPayload;
 }
 
-type WSMessage = UserMessage | ContentMessage;
-
 interface DocPageProps {
   sessionId?: string;
 }
@@ -55,7 +53,14 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
   const [users, setUsers] = useState<Array<UserDataType>>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [userDocuments, setUserDocuments] = useState<
+    Array<{
+      id: string;
+      docId: string;
+      updatedAt: string;
+      content: string;
+    }>
+  >([]);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -177,7 +182,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
     );
   };
 
-  const handleServerResponse = (event: MessageEvent) => {
+  const handleServerResponse = useCallback((event: MessageEvent) => {
     try {
       const ParsedData = JSON.parse(event.data);
       const eventType = ParsedData.type;
@@ -259,7 +264,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
         console.error("Error splitting concatenated messages:", splitError);
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     //(Hydration error fix)
@@ -382,7 +387,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
   };
 
   // Load document function
-  const loadDocument = async () => {
+  const loadDocument = useCallback(async () => {
     if (!isClient) return;
 
     try {
@@ -405,7 +410,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
     } catch (error) {
       console.error("Load error:", error);
     }
-  };
+  }, [isClient, sessionId]);
 
   // Get user documents function
   const getUserDocuments = async () => {
@@ -545,37 +550,39 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
                     No saved documents yet
                   </div>
                 ) : (
-                  userDocuments.map((doc: any) => (
-                    <div
-                      key={doc.id}
-                      className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/20 transition-all duration-200 cursor-pointer"
-                      onClick={() => loadSpecificDocument(doc.docId)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-white font-medium">
-                            Doc: {doc.docId}
-                          </h3>
-                          <p className="text-white/60 text-sm">
-                            {new Date(doc.updatedAt).toLocaleDateString()}
-                          </p>
+                  userDocuments.map(
+                    (doc: { id: string; docId: string; updatedAt: string }) => (
+                      <div
+                        key={doc.id}
+                        className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/20 transition-all duration-200 cursor-pointer"
+                        onClick={() => loadSpecificDocument(doc.docId)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-white font-medium">
+                              Doc: {doc.docId}
+                            </h3>
+                            <p className="text-white/60 text-sm">
+                              {new Date(doc.updatedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <svg
+                            className="w-4 h-4 text-white/60"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
                         </div>
-                        <svg
-                          className="w-4 h-4 text-white/60"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
                       </div>
-                    </div>
-                  ))
+                    )
+                  )
                 )}
               </div>
             </div>

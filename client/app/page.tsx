@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "./contexts/AuthContext";
 import { AuthModal } from "./components/AuthModal";
+import Image from "next/image";
 
 export default function Home() {
   const router = useRouter();
@@ -351,11 +352,14 @@ export default function Home() {
 
                   {/* Doc Online Demo GIF */}
                   <div className="mt-8 rounded-2xl overflow-hidden border border-white/20 shadow-2xl group-hover:shadow-blue-500/20 transition-all duration-500">
-                    <img
+                    <Image
                       src="/doc.gif"
                       alt="Doc Online Demo - Collaborative document editing in action"
+                      width={400}
+                      height={250}
                       className="w-full h-auto object-cover"
                       style={{ maxHeight: "250px" }}
+                      unoptimized
                     />
                   </div>
                 </div>
@@ -419,11 +423,14 @@ export default function Home() {
 
                   {/* ExcaliDraw Demo GIF */}
                   <div className="mt-8 rounded-2xl overflow-hidden border border-white/20 shadow-2xl group-hover:shadow-purple-500/20 transition-all duration-500">
-                    <img
+                    <Image
                       src="/excali.gif"
                       alt="ExcaliDraw Demo - Collaborative whiteboard in action"
+                      width={400}
+                      height={250}
                       className="w-full h-auto object-cover"
                       style={{ maxHeight: "250px" }}
+                      unoptimized
                     />
                   </div>
                 </div>

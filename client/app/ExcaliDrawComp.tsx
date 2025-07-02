@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
   Excalidraw,
   convertToExcalidrawElements,
@@ -40,8 +40,6 @@ interface ContentMessage {
   data: ContentPayload;
 }
 
-type WSMessage = UserMessage | ContentMessage;
-
 interface ExcalidrawWrapperProps {
   sessionId?: string;
 }
@@ -62,12 +60,22 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
   const [users, setUsers] = useState<Array<UserDataType>>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [userDrawings, setUserDrawings] = useState<any[]>([]);
-  const [currentElements, setCurrentElements] = useState<any[]>([]);
-  const [currentAppState, setCurrentAppState] = useState<any>({
+  const [userDrawings, setUserDrawings] = useState<
+    Array<{
+      id: string;
+      drawingId: string;
+      updatedAt: string;
+      content: string;
+    }>
+  >([]);
+  const [currentElements, setCurrentElements] = useState<unknown[]>([]);
+  const [currentAppState, setCurrentAppState] = useState<{
+    collaborators: Map<string, unknown>;
+    [key: string]: unknown;
+  }>({
     collaborators: new Map(),
   });
-  const [initialData, setInitialData] = useState<any>(null);
+  const [initialData, setInitialData] = useState<unknown>(null);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error" | "info";
@@ -161,7 +169,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
     );
   };
 
-  const handleServerResponse = (event: MessageEvent) => {
+  const handleServerResponse = useCallback((event: MessageEvent) => {
     try {
       const ParsedData = JSON.parse(event.data);
       const eventType = ParsedData.type;
@@ -242,7 +250,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
         console.error("Error splitting concatenated messages:", splitError);
       }
     }
-  };
+  }, []);
 
   useEffect(() => {
     //(Hydration error fix)
@@ -322,7 +330,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
   };
 
   // Load drawing function
-  const loadDrawing = async () => {
+  const loadDrawing = useCallback(async () => {
     if (!isClient) return;
 
     try {
@@ -361,7 +369,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
     } catch (error) {
       console.error("Load error:", error);
     }
-  };
+  }, [isClient, sessionId]);
 
   // Get user drawings function
   const getUserDrawings = async () => {
@@ -489,20 +497,21 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
     };
 
     connectWebSocket();
-  }, [isClient, sessionId]);
+  }, [isClient, sessionId, handleServerResponse, loadDrawing]);
 
-  const handlePointerUpdate = (payload: any) => {
+  const handlePointerUpdate = (payload: unknown) => {
+    const typedPayload = payload as { pointer?: { x?: number; y?: number } };
     if (
-      payload.pointer &&
-      payload.pointer.x !== undefined &&
-      payload.pointer.y !== undefined &&
+      typedPayload.pointer &&
+      typedPayload.pointer.x !== undefined &&
+      typedPayload.pointer.y !== undefined &&
       isConnected && // Only send if WebSocket is connected
       ws.current &&
       ws.current.readyState === WebSocket.OPEN
     ) {
       const position = {
-        x: payload.pointer.x,
-        y: payload.pointer.y,
+        x: typedPayload.pointer.x,
+        y: typedPayload.pointer.y,
       };
 
       const contentPayload: ContentPayload = {
@@ -517,15 +526,21 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
   };
 
   // Handle Excalidraw changes and log as JSON
-  const handleExcalidrawChange = (elements: any, appState: any) => {
+  const handleExcalidrawChange = (elements: unknown, appState: unknown) => {
     // Update current state for saving
-    setCurrentElements(elements);
-    setCurrentAppState(appState);
+    setCurrentElements(elements as unknown[]);
+    setCurrentAppState(
+      appState as {
+        collaborators: Map<string, unknown>;
+        [key: string]: unknown;
+      }
+    );
 
     // For saving, we need to serialize the appState properly
     // Remove or convert non-serializable data like Maps
+    const typedAppState = appState as { [key: string]: unknown };
     const serializableAppState = {
-      ...appState,
+      ...typedAppState,
       collaborators: undefined, // Don't save collaborators as they're runtime data
     };
 
@@ -621,37 +636,43 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
                     No saved drawings yet
                   </div>
                 ) : (
-                  userDrawings.map((drawing: any) => (
-                    <div
-                      key={drawing.id}
-                      className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/20 transition-all duration-200 cursor-pointer"
-                      onClick={() => loadSpecificDrawing(drawing.drawingId)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-white font-medium">
-                            Drawing: {drawing.drawingId}
-                          </h3>
-                          <p className="text-white/60 text-sm">
-                            {new Date(drawing.updatedAt).toLocaleDateString()}
-                          </p>
+                  userDrawings.map(
+                    (drawing: {
+                      id: string;
+                      drawingId: string;
+                      updatedAt: string;
+                    }) => (
+                      <div
+                        key={drawing.id}
+                        className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20 hover:bg-white/20 transition-all duration-200 cursor-pointer"
+                        onClick={() => loadSpecificDrawing(drawing.drawingId)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-white font-medium">
+                              Drawing: {drawing.drawingId}
+                            </h3>
+                            <p className="text-white/60 text-sm">
+                              {new Date(drawing.updatedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <svg
+                            className="w-4 h-4 text-white/60"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
                         </div>
-                        <svg
-                          className="w-4 h-4 text-white/60"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
                       </div>
-                    </div>
-                  ))
+                    )
+                  )
                 )}
               </div>
             </div>
@@ -835,7 +856,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
             key={sessionId + (initialData ? "loaded" : "empty")}
             onPointerUpdate={handlePointerUpdate}
             onChange={handleExcalidrawChange}
-            initialData={initialData}
+            initialData={initialData as never}
           />
 
           {/* User Cursors */}
