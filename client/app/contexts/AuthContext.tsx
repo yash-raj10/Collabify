@@ -1,5 +1,6 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { API_ENDPOINTS } from "../config/api";
 
 interface User {
   id: string;
@@ -50,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const validateToken = async (token: string) => {
     console.log("AuthContext: Validating token...");
     try {
-      const response = await fetch("http://localhost:8080/api/profile", {
+      const response = await fetch(API_ENDPOINTS.AUTH.PROFILE, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -79,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      const response = await fetch("http://localhost:8080/api/auth/login", {
+      const response = await fetch(API_ENDPOINTS.AUTH.LOGIN, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -109,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     password: string
   ): Promise<boolean> => {
     try {
-      const response = await fetch("http://localhost:8080/api/auth/register", {
+      const response = await fetch(API_ENDPOINTS.AUTH.REGISTER, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -246,8 +246,8 @@ export default function Home() {
                   Multi-user Support
                 </h3>
                 <p className="text-white/80 leading-relaxed">
-                  Work with unlimited team members. See everyone's cursors and
-                  contributions in real-time.
+                  Work with unlimited team members. See everyone&apos;s cursors
+                  and contributions in real-time.
                 </p>
               </div>
 

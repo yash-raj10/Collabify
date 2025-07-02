@@ -1,8 +1,9 @@
 "use client";
-import React, { use, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { throttle, debounce } from "./utils";
 import Toast from "./components/Toast";
+import { buildWebSocketUrl, buildDocumentUrl } from "./config/api";
 
 type UserDataType = {
   userId: string | null;
@@ -278,9 +279,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
       return;
     }
 
-    ws.current = new WebSocket(
-      `ws://localhost:8080/ws?session=${sessionId}&token=${token}`
-    );
+    ws.current = new WebSocket(buildWebSocketUrl(sessionId, token));
 
     ws.current.addEventListener("open", () => {
       console.log("WebSocket connection established");
@@ -356,7 +355,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
         return;
       }
 
-      const response = await fetch("http://localhost:8080/api/documents", {
+      const response = await fetch(buildDocumentUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -390,14 +389,11 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
       const token = localStorage.getItem("authToken");
       if (!token) return;
 
-      const response = await fetch(
-        `http://localhost:8080/api/documents/${sessionId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(buildDocumentUrl(sessionId), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.ok) {
         const docData = await response.json();
@@ -419,7 +415,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
       const token = localStorage.getItem("authToken");
       if (!token) return [];
 
-      const response = await fetch("http://localhost:8080/api/documents", {
+      const response = await fetch(buildDocumentUrl(), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -449,14 +445,11 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
       const token = localStorage.getItem("authToken");
       if (!token) return;
 
-      const response = await fetch(
-        `http://localhost:8080/api/documents/${docId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(buildDocumentUrl(docId), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.ok) {
         const docData = await response.json();

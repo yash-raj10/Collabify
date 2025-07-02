@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
+    "build:production": "NODE_ENV=production next build",
+    "preview": "next build && next start"
   },
   "dependencies": {
     "@excalidraw/excalidraw": "^0.18.0",

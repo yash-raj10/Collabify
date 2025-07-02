@@ -7,6 +7,7 @@ import {
 import { useRouter } from "next/navigation";
 import { throttle, debounce } from "./utils";
 import Toast from "./components/Toast";
+import { buildWebSocketUrl, buildDrawingUrl } from "./config/api";
 
 import "@excalidraw/excalidraw/index.css";
 
@@ -294,7 +295,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
         userId: userDataRef.current.userId,
       };
 
-      const response = await fetch("http://localhost:8080/api/drawings", {
+      const response = await fetch(buildDrawingUrl(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -328,14 +329,11 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
       const token = localStorage.getItem("authToken");
       if (!token) return;
 
-      const response = await fetch(
-        `http://localhost:8080/api/drawings/${sessionId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(buildDrawingUrl(sessionId), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.ok) {
         const drawingData = await response.json();
@@ -373,7 +371,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
       const token = localStorage.getItem("authToken");
       if (!token) return [];
 
-      const response = await fetch("http://localhost:8080/api/drawings", {
+      const response = await fetch(buildDrawingUrl(), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -403,14 +401,11 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
       const token = localStorage.getItem("authToken");
       if (!token) return;
 
-      const response = await fetch(
-        `http://localhost:8080/api/drawings/${drawingId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(buildDrawingUrl(drawingId), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.ok) {
         const drawingData = await response.json();
@@ -463,9 +458,7 @@ const ExcalidrawWrapper: React.FC<ExcalidrawWrapperProps> = ({
       }
 
       // Include session ID and token in WebSocket connection
-      ws.current = new WebSocket(
-        `ws://localhost:8080/ws?session=${sessionId}&token=${token}`
-      );
+      ws.current = new WebSocket(buildWebSocketUrl(sessionId, token));
 
       ws.current.addEventListener("open", () => {
         console.log(
