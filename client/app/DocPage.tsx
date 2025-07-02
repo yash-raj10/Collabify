@@ -96,30 +96,45 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
   );
 
   const applyRemoteUpdate = (remoteContent: string): void => {
-    if (!contentArea.current || !isClient) return;
+    console.log("applyRemoteUpdate called with content length:", remoteContent?.length);
+    console.log("contentArea.current exists:", !!contentArea.current);
+    console.log("isClient:", isClient);
+    
+    if (!contentArea.current || !isClient) {
+      console.log("Skipping update - contentArea or isClient not ready");
+      return;
+    }
 
     try {
       const selection = window.getSelection();
       let savedRange: Range | null = null;
 
-      if (selection && selection.rangeCount > 0) {
-        savedRange = selection.getRangeAt(0).cloneRange();
+      // Only save range if we have focus and selection
+      if (selection && selection.rangeCount > 0 && document.activeElement === contentArea.current) {
+        try {
+          savedRange = selection.getRangeAt(0).cloneRange();
+        } catch (error) {
+          console.log("Could not save selection range:", error);
+        }
       }
 
       const scrollTop = contentArea.current.scrollTop;
       const scrollLeft = contentArea.current.scrollLeft;
 
+      console.log("Setting innerHTML to:", remoteContent.substring(0, 100) + "...");
       contentArea.current.innerHTML = remoteContent;
 
+      // Restore scroll position
       contentArea.current.scrollTop = scrollTop;
       contentArea.current.scrollLeft = scrollLeft;
 
-      if (savedRange && selection) {
+      // Only restore selection if we had one and we're not currently typing
+      if (savedRange && selection && document.activeElement === contentArea.current) {
         try {
+          selection.removeAllRanges();
           selection.addRange(savedRange);
-          contentArea.current.focus();
         } catch (error) {
-          console.error("Error restoring selection range:", error);
+          console.log("Could not restore selection range:", error);
         }
       }
     } catch (error) {
@@ -198,7 +213,10 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
           userDataRef.current?.userId
         );
 
-        if (contentMsg.data.userData.userId !== userDataRef.current?.userId) {
+        // Always apply remote updates if they're from a different user
+        // Also apply if we don't have a userId yet (initial load)
+        if (!userDataRef.current?.userId || 
+            contentMsg.data.userData.userId !== userDataRef.current?.userId) {
           console.log("Applying remote content update");
           applyRemoteUpdate(contentMsg.data.content);
           handleUserCursors(contentMsg.data);
@@ -264,7 +282,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
         console.error("Error splitting concatenated messages:", splitError);
       }
     }
-  }, []);
+  }, [isClient]);
 
   useEffect(() => {
     //(Hydration error fix)
@@ -308,7 +326,7 @@ const DocPage: React.FC<DocPageProps> = ({ sessionId = "default" }) => {
         ws.current.close();
       }
     };
-  }, [isClient, sessionId]);
+  }, [isClient, sessionId, handleServerResponse]);
 
   const handleInputTyping = (e: React.FormEvent<HTMLDivElement>) => {
     if (!e || !isClient) {
