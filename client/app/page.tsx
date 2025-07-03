@@ -358,7 +358,7 @@ export default function Home() {
                   </svg>
                 </div>
                 <h3 className="text-2xl font-bold text-white mb-4">
-                  Multi-user Support
+                  Multi-user Support.
                 </h3>
                 <p className="text-white/80 leading-relaxed">
                   Work with unlimited team members. Share session links and see
