@@ -18,6 +18,14 @@ export const metadata: Metadata = {
   title: "Collabify - Real-time Collaborative Platform",
   description:
     "Collaborate in real-time with ExcaliDraw whiteboard and Doc Online editor",
+  icons: {
+    icon: [
+      {
+        url: "/favicon.svg",
+        type: "image/svg+xml",
+      },
+    ],
+  },
 };
 
 export default function RootLayout({
