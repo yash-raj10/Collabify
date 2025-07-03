@@ -362,7 +362,7 @@ export default function Home() {
                 </h3>
                 <p className="text-white/80 leading-relaxed">
                   Work with unlimited team members. Share session links and see
-                  everyone's contributions in real-time with live cursors.
+                  everyone&apos;s contributions in real-time with live cursors.
                 </p>
               </div>
             </div>
